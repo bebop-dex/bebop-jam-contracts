@@ -1,8 +1,9 @@
-# <h1 align="center"> Hardhat x Foundry Template </h1>
+# Bebop Jam
 
-**Template repository for getting started quickly with Hardhat and Foundry in one project**
+![Alt text](bebop.gif?raw=true "Title")
 
-![Github Actions](https://github.com/devanonon/hardhat-foundry-template/workflows/test/badge.svg)
+![Github Actions](https://github.com/bebop-dex/bebop-jam-contracts/workflows/test/badge.svg)
+
 
 ### Getting Started
 
