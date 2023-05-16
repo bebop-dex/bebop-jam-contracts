@@ -22,6 +22,7 @@ contract JamAllownaceManager is IJamAllowanceManager {
 
     /// @inheritdoc IJamAllowanceManager
     function transfer(address from, address to, IERC20 token, uint256 amount) onlyOperator(msg.sender) external {
+        // Will need to handler other allowance types
         token.safeTransferFrom(from, to, amount);
     }
 }
