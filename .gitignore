@@ -1,7 +1,6 @@
 # Foundry
 cache/
 out/
-lib/
 
 # JS
 node_modules/
