@@ -8,6 +8,11 @@ import "./interfaces/IJamSettlement.sol";
 import "./libraries/JamInteraction.sol";
 import "./libraries/JamOrder.sol";
 
+/// @title JamSettlement
+/// @notice The settlement contract executes the full lifecycle of a trade on chain. It can only be executed by whitelisted addresses (solvers)
+/// Solvers figure out what "interactions" to pass to this contract such that the user order is fulfilled.
+/// The contract ensures that only the user agreed price can be executed and otherwise will fail to execute.
+/// As long as the trade is fulfilled, the solver is allowed to keep any potential excess.
 contract JamSettlement is IJamSettlement {
     IJamAllowanceManager public allowanceManager;
     IJamSolverRegistry public solverRegistry;
