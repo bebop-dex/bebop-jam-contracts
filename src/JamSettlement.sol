@@ -2,6 +2,7 @@
 pragma solidity ^0.8.13;
 
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import "./JamAllowanceManager.sol";
 import "./interfaces/IJamAllowanceManager.sol";
 import "./interfaces/IJamSolverRegistry.sol";
 import "./interfaces/IJamSettlement.sol";
@@ -19,8 +20,8 @@ contract JamSettlement is IJamSettlement {
 
     using SafeERC20 for IERC20;
 
-    constructor(IJamAllowanceManager _allowanceManager, IJamSolverRegistry _solverRegistry) {
-        allowanceManager = _allowanceManager;
+    constructor(IJamSolverRegistry _solverRegistry) {
+        allowanceManager = new JamAllowanceManager(address(this));
         solverRegistry = _solverRegistry;
     }
 

@@ -15,6 +15,7 @@ library JamInteraction {
     /// @param interaction The interaction to execute
     /// @return result Whether the interaction succeeded
     function execute(Data calldata interaction) internal returns (bool result) {
-
+        (bool _result,) = payable(interaction.to).call{ value: interaction.value }(interaction.data);
+        return _result;
     }
 }

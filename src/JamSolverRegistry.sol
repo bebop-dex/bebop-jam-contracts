@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import "../lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 import "./interfaces/IJamSolverRegistry.sol";
 import "./libraries/JamInteraction.sol";
 import "./libraries/JamOrder.sol";
@@ -10,27 +11,17 @@ import "./libraries/JamOrder.sol";
 /// @notice Allows specific addresses to interact with settlement. Because the settlement contract is a receiver of funds
 /// We only let known parties interact with the contract to reduce the attack surface - although the settlement does itself
 /// ensure that user receives what they signed for.
-contract JamSolverRegistry is IJamSolverRegistry {
-    address public owner;
+contract JamSolverRegistry is Ownable, IJamSolverRegistry {
     mapping (address => bool) public solvers;
 
-    constructor() {
-        owner = msg.sender;
-    }
-
     /// @inheritdoc IJamSolverRegistry
-    function transferOwnership(address newOwner) external {
-        owner = newOwner;
-    }
-
-    /// @inheritdoc IJamSolverRegistry
-    function add(address solver) external {
+    function add(address solver) external onlyOwner() {
         solvers[solver] = true;
         emit RegistryUpdated(solver, true);
     }
 
     /// @inheritdoc IJamSolverRegistry
-    function remove(address solver) external {
+    function remove(address solver) external onlyOwner() {
         delete solvers[solver];
         emit RegistryUpdated(solver, false);
     }

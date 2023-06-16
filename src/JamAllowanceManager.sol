@@ -8,14 +8,15 @@ import "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol"
 /// @title JamAllowanceManager
 /// @notice The reason an allowance manager exists is to prevent interaction to the settlement contract draining user funds
 /// By having another contract that allowances are made to, we can enforce that it is only used to draw in user baalnces to settlement and not sent out
-contract JamAllownaceManager is IJamAllowanceManager {
+contract JamAllowanceManager is IJamAllowanceManager {
     address operator;
 
     using SafeERC20 for IERC20;
 
-    constructor() {
+    constructor(address _operator) {
         // Operator can be defined at creation time with `msg.sender` 
         // Pass in the settlement - and that can be the only caller.
+        operator = _operator;
     }
 
     modifier onlyOperator(address account) {

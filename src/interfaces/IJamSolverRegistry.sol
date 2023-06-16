@@ -10,10 +10,6 @@ interface IJamSolverRegistry {
         bool allowed
     );
 
-    /// @dev Transfer the ownership of the contract to another account
-    /// @param newOwner The new owner for the contract
-    function transferOwnership(address newOwner) external;
-
     /// @dev Registers a solver
     /// @param solver the solver address to add
     function add(address solver) external;
