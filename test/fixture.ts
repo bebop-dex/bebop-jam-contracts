@@ -1,5 +1,4 @@
 import { ethers } from "hardhat";
-import { JamAllowanceManager, JamSettlement, JamSolverRegistry } from "../typechain-types";
 
 export async function getFixture () {
   const [deployer, solver, user, ...users] = await ethers.getSigners();
@@ -20,7 +19,7 @@ export async function getFixture () {
 
   const allowanceManagerAddress = await settlement.allowanceManager();
   const JamAllowanceManager = await ethers.getContractFactory("JamAllowanceManager");
-  const allowanceManager: JamAllowanceManager = await JamAllowanceManager.attach(allowanceManagerAddress);
+  const allowanceManager = await JamAllowanceManager.attach(allowanceManagerAddress);
 
   await registry.add(solver.address);
 
