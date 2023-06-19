@@ -17,9 +17,9 @@ export async function getFixture () {
   const settlement = await JamSettlement.deploy(registry.address);
   await settlement.deployed();
 
-  const allowanceManagerAddress = await settlement.allowanceManager();
-  const JamAllowanceManager = await ethers.getContractFactory("JamAllowanceManager");
-  const allowanceManager = await JamAllowanceManager.attach(allowanceManagerAddress);
+  const balanceManagerAddress = await settlement.balanceManager();
+  const JamBalanceManager = await ethers.getContractFactory("JamBalanceManager");
+  const balanceManager = await JamBalanceManager.attach(balanceManagerAddress);
 
   await registry.add(solver.address);
 
@@ -30,7 +30,7 @@ export async function getFixture () {
     users,
     registry,
     settlement,
-    allowanceManager,
+    balanceManager,
     token1,
     token2
   }

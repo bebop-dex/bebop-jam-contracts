@@ -4,13 +4,21 @@ export default async function example(
   params: any,
   hre: HardhatRuntimeEnvironment
 ): Promise<void> {
-  // const ethers = hre.ethers;
+  const ethers = hre.ethers;
 
-  // const [account] = await ethers.getSigners();
+  const JamSolverRegistry = await ethers.getContractFactory("JamSolverRegistry");
+  const registry = await JamSolverRegistry.deploy();
+  await registry.deployed();
+  
+  const JamSettlement = await ethers.getContractFactory("JamSettlement");
+  const settlement = await JamSettlement.deploy(registry.address);
+  await settlement.deployed();
 
+  const balanceManagerAddress = await settlement.balanceManager();
 
-
-  // console.log(
-  //   `Balance for 1st account ${await account.getAddress()}: ${await account.getBalance()}`
-  // );
+  console.log({
+    "JamSettlement": settlement.address,
+    "JamSolverRegistry": settlement.address,
+    "JamBalanceManager": balanceManagerAddress
+  })
 }

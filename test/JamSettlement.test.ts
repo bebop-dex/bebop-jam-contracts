@@ -53,7 +53,7 @@ describe("JamSettlement", function () {
   }); 
 
   it('Should swap with bebop settlement', async function () {
-    const { token1, token2, user, users, settlement, allowanceManager, solver } = fixture;
+    const { token1, token2, user, users, settlement, balanceManager, solver } = fixture;
     const maker = users[0]
 
     const sellAmount = 100000000
@@ -62,7 +62,7 @@ describe("JamSettlement", function () {
     await token1.mint(user.address, sellAmount);
     await token2.mint(maker.address, buyAmount);
 
-    await token1.connect(user).approve(allowanceManager.address, sellAmount);
+    await token1.connect(user).approve(balanceManager.address, sellAmount);
     await token2.connect(maker).approve(bebop.address, buyAmount);
 
     const expiry = Math.floor(Date.now() / 1000) + 100000;

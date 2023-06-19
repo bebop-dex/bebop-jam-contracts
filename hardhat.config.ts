@@ -6,6 +6,8 @@ import { HardhatUserConfig, task } from "hardhat/config";
 
 import deploy from "./tasks/deploy";
 
+const POLYGON_PRIVATE_KEY = process.env.POLYGON_PRIVATE_KEY;
+
 function getRemappings() {
   return fs
     .readFileSync("remappings.txt", "utf8")
@@ -50,6 +52,10 @@ const config: HardhatUserConfig = {
       forking: {
         url: 'https://polygon-mainnet.g.alchemy.com/v2/Q39gdiKfeBSD5lr30t-OJQzl5VIgbwVR'
       }
+    },
+    polygon: {
+      url: 'https://polygon-rpc.com',
+      accounts: POLYGON_PRIVATE_KEY ? [POLYGON_PRIVATE_KEY] : undefined
     }
   }
 };

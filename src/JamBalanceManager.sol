@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "./interfaces/IJamAllowanceManager.sol";
+import "./interfaces/IJamBalanceManager.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
-/// @title JamAllowanceManager
-/// @notice The reason an allowance manager exists is to prevent interaction to the settlement contract draining user funds
-/// By having another contract that allowances are made to, we can enforce that it is only used to draw in user baalnces to settlement and not sent out
-contract JamAllowanceManager is IJamAllowanceManager {
+/// @title JamBalanceManager
+/// @notice The reason a balance manager exists is to prevent interaction to the settlement contract draining user funds
+/// By having another contract that allowances are made to, we can enforce that it is only used to draw in user balances to settlement and not sent out
+contract JamBalanceManager is IJamBalanceManager {
     address operator;
 
     using SafeERC20 for IERC20;
@@ -24,9 +24,10 @@ contract JamAllowanceManager is IJamAllowanceManager {
         _;
     }
 
-    /// @inheritdoc IJamAllowanceManager
+    /// @inheritdoc IJamBalanceManager
     function transfer(address from, address to, IERC20 token, uint256 amount) onlyOperator(msg.sender) external {
         // Will need to handler other allowance types
+        // It can also have internal balances
         token.safeTransferFrom(from, to, amount);
     }
 }
