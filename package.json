@@ -7,6 +7,7 @@
     "test": "test"
   },
   "scripts": {
+    "compile": "hardhat compile",
     "test": "hardhat test"
   },
   "author": "<info@bebop.xyz>",

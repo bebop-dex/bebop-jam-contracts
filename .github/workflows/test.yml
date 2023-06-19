@@ -57,6 +57,10 @@ jobs:
       - name: Install Node dependencies
         run: |
           npm ci
+
+      - name: Compile Contracts
+        run: |
+          npm run compile
         
       - name: Run Hardhat tests
         run: |
