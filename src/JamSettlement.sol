@@ -2,6 +2,7 @@
 pragma solidity ^0.8.13;
 
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import "../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "./JamBalanceManager.sol";
 import "./interfaces/IJamBalanceManager.sol";
 import "./interfaces/IJamSolverRegistry.sol";
@@ -14,7 +15,7 @@ import "./libraries/JamOrder.sol";
 /// Solvers figure out what "interactions" to pass to this contract such that the user order is fulfilled.
 /// The contract ensures that only the user agreed price can be executed and otherwise will fail to execute.
 /// As long as the trade is fulfilled, the solver is allowed to keep any potential excess.
-contract JamSettlement is IJamSettlement {
+contract JamSettlement is IJamSettlement, ReentrancyGuard {
     IJamBalanceManager public balanceManager;
     IJamSolverRegistry public solverRegistry;
 
@@ -31,7 +32,7 @@ contract JamSettlement is IJamSettlement {
     }
 
     /// @inheritdoc IJamSettlement
-    function settle(JamOrder.Data calldata order, JamInteraction.Data[] calldata interactions) external onlySolver(msg.sender) {
+    function settle(JamOrder.Data calldata order, JamInteraction.Data[] calldata interactions) external nonReentrant onlySolver(msg.sender) {
         /**
          * recover signature from order.signature based on type
          * call balanceManager.transfer() for order sell tokens
