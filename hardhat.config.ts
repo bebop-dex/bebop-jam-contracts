@@ -54,7 +54,7 @@ const config: HardhatUserConfig = {
       }
     },
     polygon: {
-      url: 'https://polygon-rpc.com',
+      url: 'https://polygon-mainnet.g.alchemy.com/v2/Q39gdiKfeBSD5lr30t-OJQzl5VIgbwVR',
       accounts: POLYGON_PRIVATE_KEY ? [POLYGON_PRIVATE_KEY] : undefined
     }
   }
