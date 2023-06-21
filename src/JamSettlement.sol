@@ -41,12 +41,17 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard {
          */
 
         // Recover sig
-        balanceManager.transfer(order.from, address(this), order.sellToken, order.sellAmount);
+
+        for (uint i; i < order.sellTokens.length; i ++) {
+            balanceManager.transfer(order.from, address(this), order.sellTokens[i], order.sellAmounts[i]);
+        }
         for (uint i; i < interactions.length; i++) {
             // Prevent calls to balance manager
             require(interactions[i].to != address(balanceManager));
-            require(JamInteraction.execute(interactions[i]));
+            require(JamInteraction.execute(interactions[i]), "INTERACTION_FAILED");
         }
-        order.buyToken.safeTransfer(order.receiver, order.buyAmount);
+        for (uint i; i < order.buyTokens.length; i ++) {
+            order.buyTokens[i].safeTransfer(order.receiver, order.buyAmounts[i]);
+        }
     }
 }

@@ -11,13 +11,13 @@ library JamOrder {
     /// @dev Data respresenting a Jam Order. This data is signed by the 
     /// @dev TODO: addresses and tokens will need to be turned into arrays to support 12m, m21
     struct Data {
-        IERC20 buyToken;
-        IERC20 sellToken;
+        IERC20[] buyTokens;
+        IERC20[] sellTokens;
         address from;
         address receiver;
         uint32 expiry;
-        uint256 sellAmount;
-        uint256 buyAmount;
+        uint256[] sellAmounts;
+        uint256[] buyAmounts;
         bytes signature;
         /**
          * TODO: Add `signType`

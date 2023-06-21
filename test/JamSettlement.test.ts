@@ -53,27 +53,37 @@ describe("JamSettlement", function () {
   }); 
 
   it('Should swap with bebop settlement', async function () {
-    const { token1, token2, user, users, settlement, balanceManager, solver } = fixture;
+    const { token1, token2, token3, user, users, settlement, balanceManager, solver } = fixture;
     const maker = users[0]
 
-    const sellAmount = 100000000
-    const buyAmount = 500000000
+    const jamOrder: JamOrder.DataStruct = {
+      buyAmounts: [500000000],
+      sellAmounts: [100000000, 200000000],
+      expiry: Math.floor(Date.now() / 1000) + 100000,
+      from: user.address,
+      sellTokens: [token1.address, token2.address],
+      buyTokens: [token3.address],
+      receiver: user.address,
+      signature: '0x' // TODO: Signature not validated atm 
+    }
 
-    await token1.mint(user.address, sellAmount);
-    await token2.mint(maker.address, buyAmount);
+    await token1.mint(user.address, jamOrder.sellAmounts[0]);
+    await token2.mint(user.address, jamOrder.sellAmounts[1]);
+    await token3.mint(maker.address, jamOrder.buyAmounts[0]);
 
-    await token1.connect(user).approve(balanceManager.address, sellAmount);
-    await token2.connect(maker).approve(bebop.address, buyAmount);
+    await token1.connect(user).approve(balanceManager.address, jamOrder.sellAmounts[0]);
+    await token2.connect(user).approve(balanceManager.address, jamOrder.sellAmounts[1]);
+    await token3.connect(maker).approve(bebop.address, jamOrder.buyAmounts[0]);
 
-    const expiry = Math.floor(Date.now() / 1000) + 100000;
     const maker_nonce = 100000000;
     const taker_address = settlement.address;
     const receiver = settlement.address;
     const maker_address = maker.address;
-    const taker_tokens = [token1.address];
-    const maker_tokens = [token2.address];
-    const taker_amounts = [sellAmount];
-    const maker_amounts = [buyAmount];
+    const taker_tokens = jamOrder.sellTokens;
+    const maker_tokens = jamOrder.buyTokens;
+    const taker_amounts = jamOrder.sellAmounts;
+    const maker_amounts = jamOrder.buyAmounts;
+    const expiry = jamOrder.expiry;
 
     const BEBOP_DOMAIN = {
       "name": "BebopSettlement",
@@ -109,17 +119,6 @@ describe("JamSettlement", function () {
       "using_contract": [false]
     }
 
-    const jamOrder: JamOrder.DataStruct = {
-      buyAmount,
-      sellAmount,
-      expiry,
-      from: user.address,
-      sellToken: token1.address,
-      buyToken: token2.address,
-      receiver: user.address,
-      signature: '0x' // TODO: Signature not validated atm 
-    }
-
     // Create the settlement transaction with Bebop PMM
     const settleTx = await bebop.connect(solver).populateTransaction.SettleAggregateOrder(aggregateOrder, { signatureType: 0, signatureBytes: '0x'}, [ { signatureBytesPermit2: '0x', signature: { signatureType: 0, signatureBytes: maker_sig } }])
 
@@ -127,23 +126,26 @@ describe("JamSettlement", function () {
       throw new Error('Settle TX did not generate correctly')
     }
 
-    const bebopApprovalTx = await token1.populateTransaction.approve(bebop.address, sellAmount)
+    const bebopApprovalTxToken1 = await token1.populateTransaction.approve(bebop.address, jamOrder.sellAmounts[0])
+    const bebopApprovalTxToken2 = await token2.populateTransaction.approve(bebop.address, jamOrder.sellAmounts[1])
 
-    if (!bebopApprovalTx.to || !bebopApprovalTx.data) {
+    if (!bebopApprovalTxToken1.to || !bebopApprovalTxToken1.data || !bebopApprovalTxToken2.to || !bebopApprovalTxToken2.data) {
       throw new Error('Approval TX did not generate correctly')
     }
 
     const interactions: JamInteraction.DataStruct[] = [
       // Approve BebopSettlement to transfer the sell token to maker
-      { to: bebopApprovalTx.to, data: bebopApprovalTx.data, value: 0 },
+      { to: bebopApprovalTxToken1.to, data: bebopApprovalTxToken1.data, value: 0 },
+      // Approve BebopSettlement to transfer the sell token to maker
+      { to: bebopApprovalTxToken2.to, data: bebopApprovalTxToken2.data, value: 0 },
       // Call BebopSettlement to fill the order
       { to: settleTx.to, data: settleTx.data, value: 0 },
     ]
 
     await settlement.connect(solver).settle(jamOrder, interactions)
 
-    const userBalance = await token2.balanceOf(jamOrder.receiver)
+    const userBalance = await token3.balanceOf(jamOrder.receiver)
 
-    expect(userBalance).to.be.equal(jamOrder.buyAmount);
+    expect(userBalance).to.be.equal(jamOrder.buyAmounts[0]);
   });
 });
