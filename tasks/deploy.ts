@@ -1,6 +1,6 @@
 import { HardhatRuntimeEnvironment } from "hardhat/types/runtime";
 
-export default async function example(
+export default async function deploy(
   params: any,
   hre: HardhatRuntimeEnvironment
 ): Promise<void> {
@@ -18,7 +18,7 @@ export default async function example(
 
   console.log({
     "JamSettlement": settlement.address,
-    "JamSolverRegistry": settlement.address,
+    "JamSolverRegistry": registry.address,
     "JamBalanceManager": balanceManagerAddress
   })
 }
