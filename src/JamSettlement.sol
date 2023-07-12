@@ -39,12 +39,7 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning {
 
     /// @inheritdoc IJamSettlement
     function settle(JamOrder.Data calldata order, Signature.TypedSignature calldata signature, JamInteraction.Data[] calldata interactions, JamHooks.Def calldata hooks) external nonReentrant {
-        // Allow settle from user without sig
-        if (order.from != msg.sender) {
-            bytes32 hooksHash = hashHooks(hooks);
-            bytes32 orderHash = hashOrder(order, hooksHash);
-            validateSignature(order.from, orderHash, signature);
-        }
+        validateOrder(order, hooks, signature);
         require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
         for (uint i; i < order.sellTokens.length; i ++) {
             balanceManager.transfer(order.from, address(this), order.sellTokens[i], order.sellAmounts[i]);

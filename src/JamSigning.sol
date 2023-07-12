@@ -7,6 +7,7 @@ import "./libraries/JamHooks.sol";
 import "./libraries/Signature.sol";
 
 abstract contract JamSigning {
+    mapping(uint256 => bool) private invalidNonces;
 
     bytes32 private constant DOMAIN_NAME = keccak256("JamSettlement");
     bytes32 private constant DOMAIN_VERSION = keccak256("1");
@@ -80,5 +81,24 @@ abstract contract JamSigning {
         } else {
             revert("Invalid Signature Type");
         }
+    }
+
+    function validateOrder(JamOrder.Data memory order, JamHooks.Def memory hooks, Signature.TypedSignature memory signature) public {
+        validateNonce(order.nonce);
+        // Allow settle from user without sig
+        if (order.from != msg.sender) {
+            bytes32 hooksHash = hashHooks(hooks);
+            bytes32 orderHash = hashOrder(order, hooksHash);
+            validateSignature(order.from, orderHash, signature);
+        }
+        invalidateNonce(order.nonce);
+    }
+
+    function invalidateNonce(uint256 nonce) private {
+        invalidNonces[nonce] = true;
+    }
+
+    function validateNonce(uint256 nonce) private view {
+        require(!invalidNonces[nonce], "INVALID_NONCE");
     }
 }
