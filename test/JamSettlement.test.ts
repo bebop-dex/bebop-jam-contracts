@@ -2,8 +2,9 @@ import { expect } from "chai";
 import { waffle } from "hardhat";
 import { getFixture } from './fixture'
 import BebopSettlement from './bebop/BebopSettlement.json'
-import { Contract } from "ethers";
-import { JamInteraction, JamOrder } from "../typechain-types/src/JamSettlement";
+import { Contract, utils } from "ethers";
+import { JamInteraction, JamOrder, JamHooks, Signature, JamSettlement } from "../typechain-types/src/JamSettlement";
+import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
 const AGGREGATE_ORDER_TYPES = {
   "AggregateOrder": [
@@ -34,6 +35,37 @@ const PARTIAL_ORDER_TYPES = {
   ]
 }
 
+const JAM_ORDER_TYPES = {
+  "JamOrder": [
+    { "name": "from", "type": "address" },
+    { "name": "receiver", "type": "address" },
+    { "name": "expiry", "type": "uint32" },
+    { "name": "nonce", "type": "uint256" },
+    { "name": "hooksHash", "type": "bytes32" },
+    { "name": "buyTokens", "type": "address[]" },
+    { "name": "sellTokens", "type": "address[]" },
+    { "name": "buyAmounts", "type": "uint256[]" },
+    { "name": "sellAmounts", "type": "uint256[]" },
+  ]
+}
+
+async function signJamOrder(user: SignerWithAddress, order: JamOrder.DataStruct, settlement: JamSettlement) {
+  const JAM_DOMAIN = {
+    "name": "JamSettlement",
+    "version": "1",
+    "chainId": await user.getChainId(),
+    "verifyingContract": settlement.address
+  }
+
+  const signatureBytes = await user._signTypedData(JAM_DOMAIN, JAM_ORDER_TYPES, order);
+  const signature: Signature.TypedSignatureStruct = {
+    signatureType: 1,
+    signatureBytes: signatureBytes
+  }
+
+  return signature
+}
+
 describe("JamSettlement", function () {
   let fixture: Awaited<ReturnType<typeof getFixture>>;
   let bebop: Contract;
@@ -47,14 +79,16 @@ describe("JamSettlement", function () {
     ])
   });
 
-  it("Should deploy and add solver", async function () {
-    const { registry, solver } = fixture;
-    expect(await registry.isAllowed(solver.address))
-  }); 
-
   it('Should swap with bebop settlement', async function () {
     const { token1, token2, token3, user, users, settlement, balanceManager, solver } = fixture;
     const maker = users[0]
+
+    const hooks: JamHooks.DefStruct = {
+      beforeSettle: [],
+      afterSettle: []
+    }
+    const hooksEncoded = utils.defaultAbiCoder.encode(settlement.interface.getFunction("hashHooks").inputs, [hooks]);
+    const hooksHash = utils.keccak256(hooksEncoded);
 
     const jamOrder: JamOrder.DataStruct = {
       buyAmounts: [500000000],
@@ -64,7 +98,8 @@ describe("JamSettlement", function () {
       sellTokens: [token1.address, token2.address],
       buyTokens: [token3.address],
       receiver: user.address,
-      signature: '0x' // TODO: Signature not validated atm 
+      nonce: 123,
+      hooksHash: hooksHash,
     }
 
     await token1.mint(user.address, jamOrder.sellAmounts[0]);
@@ -135,16 +170,18 @@ describe("JamSettlement", function () {
 
     const interactions: JamInteraction.DataStruct[] = [
       // Approve BebopSettlement to transfer the sell token to maker
-      { to: bebopApprovalTxToken1.to, data: bebopApprovalTxToken1.data, value: 0 },
+      { result: true, to: bebopApprovalTxToken1.to, data: bebopApprovalTxToken1.data, value: 0 },
       // Approve BebopSettlement to transfer the sell token to maker
-      { to: bebopApprovalTxToken2.to, data: bebopApprovalTxToken2.data, value: 0 },
+      { result: true, to: bebopApprovalTxToken2.to, data: bebopApprovalTxToken2.data, value: 0 },
       // Call BebopSettlement to fill the order
-      { to: settleTx.to, data: settleTx.data, value: 0 },
+      { result: true, to: settleTx.to, data: settleTx.data, value: 0 },
     ]
 
-    await settlement.connect(solver).settle(jamOrder, interactions)
+    const signature = await signJamOrder(user, jamOrder, settlement);
 
-    const userBalance = await token3.balanceOf(jamOrder.receiver)
+    await settlement.connect(solver).settle(jamOrder, signature, interactions, hooks);
+
+    const userBalance = await token3.balanceOf(jamOrder.receiver);
 
     expect(userBalance).to.be.equal(jamOrder.buyAmounts[0]);
   });

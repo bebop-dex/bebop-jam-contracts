@@ -5,6 +5,7 @@ library JamInteraction {
     /// @dev Data representing an interaction on the chain
     struct Data {
         /// 
+        bool result;
         address to;
         uint256 value;
         bytes data;

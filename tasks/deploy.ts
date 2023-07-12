@@ -5,20 +5,15 @@ export default async function deploy(
   hre: HardhatRuntimeEnvironment
 ): Promise<void> {
   const ethers = hre.ethers;
-
-  const JamSolverRegistry = await ethers.getContractFactory("JamSolverRegistry");
-  const registry = await JamSolverRegistry.deploy();
-  await registry.deployed();
   
   const JamSettlement = await ethers.getContractFactory("JamSettlement");
-  const settlement = await JamSettlement.deploy(registry.address);
+  const settlement = await JamSettlement.deploy();
   await settlement.deployed();
 
   const balanceManagerAddress = await settlement.balanceManager();
 
   console.log({
     "JamSettlement": settlement.address,
-    "JamSolverRegistry": registry.address,
     "JamBalanceManager": balanceManagerAddress
   })
 }

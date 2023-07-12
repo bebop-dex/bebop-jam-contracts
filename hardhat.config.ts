@@ -5,7 +5,6 @@ import "hardhat-preprocessor";
 import { HardhatUserConfig, task } from "hardhat/config";
 
 import deploy from "./tasks/deploy";
-import addSolver from "./tasks/addSolver";
 
 const POLYGON_PRIVATE_KEY = process.env.POLYGON_PRIVATE_KEY;
 
@@ -18,7 +17,6 @@ function getRemappings() {
 }
 
 task("deploy", "Deploy").setAction(deploy);
-task("addSolver", "Add Solver").addParam('registryAddress').addParam('solverAddress').setAction(addSolver);
 
 const config: HardhatUserConfig = {
   solidity: {
