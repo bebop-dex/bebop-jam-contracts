@@ -32,7 +32,7 @@ contract JamSolver {
 
     function withdraw (address receiver) public onlyOwner {
         if (address(this).balance > 0) {
-            payable(receiver).transfer(address(this).balance);
+            payable(receiver).call{value: address(this).balance}("");
         }
     }
 
