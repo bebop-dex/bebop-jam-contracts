@@ -19,7 +19,7 @@ abstract contract JamSigning {
     ));
 
     bytes32 public constant JAM_ORDER_TYPE_HASH = keccak256(abi.encodePacked(
-        "JamOrder(address from,address receiver,uint32 expiry,uint256 nonce,bytes32 hooksHash,address[] buyTokens,address[] sellTokens,uint256[] buyAmounts,uint256[] sellAmounts)"
+        "JamOrder(address taker,address receiver,uint32 expiry,uint256 nonce,bytes32 hooksHash,address[] buyTokens,address[] sellTokens,uint256[] buyAmounts,uint256[] sellAmounts)"
     ));
 
     bytes32 public immutable DOMAIN_SEPARATOR;
@@ -54,7 +54,7 @@ abstract contract JamSigning {
                 keccak256(
                     abi.encode(
                         JAM_ORDER_TYPE_HASH,
-                        order.from,
+                        order.taker,
                         order.receiver,
                         order.expiry,
                         order.nonce,
@@ -86,10 +86,10 @@ abstract contract JamSigning {
     function validateOrder(JamOrder.Data memory order, JamHooks.Def memory hooks, Signature.TypedSignature memory signature) public {
         validateNonce(order.nonce);
         // Allow settle from user without sig
-        if (order.from != msg.sender) {
+        if (order.taker != msg.sender) {
             bytes32 hooksHash = hashHooks(hooks);
             bytes32 orderHash = hashOrder(order, hooksHash);
-            validateSignature(order.from, orderHash, signature);
+            validateSignature(order.taker, orderHash, signature);
         }
         invalidateNonce(order.nonce);
     }

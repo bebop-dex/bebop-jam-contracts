@@ -23,7 +23,7 @@ const PARTIAL_ORDER_TYPES = {
 
 const JAM_ORDER_TYPES = {
   "JamOrder": [
-    { "name": "from", "type": "address" },
+    { "name": "taker", "type": "address" },
     { "name": "receiver", "type": "address" },
     { "name": "expiry", "type": "uint32" },
     { "name": "nonce", "type": "uint256" },
@@ -153,7 +153,7 @@ describe("JamSettlement", function () {
       buyAmounts: [buyAmount],
       sellAmounts: taker_amounts,
       expiry,
-      from: user.address,
+      taker: user.address,
       sellTokens: taker_tokens,
       buyTokens: maker_tokens,
       receiver: user.address,

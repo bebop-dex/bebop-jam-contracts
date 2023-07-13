@@ -48,7 +48,7 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning {
         validateOrder(order, hooks, signature);
         require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
         for (uint i; i < order.sellTokens.length; ++i) {
-            balanceManager.transfer(order.from, balanceRecipient, order.sellTokens[i], order.sellAmounts[i]);
+            balanceManager.transfer(order.taker, balanceRecipient, order.sellTokens[i], order.sellAmounts[i]);
         }
         require(runInteractions(interactions), "INTERACTIONS_FAILED");
         for (uint i; i < order.buyTokens.length; ++i) {

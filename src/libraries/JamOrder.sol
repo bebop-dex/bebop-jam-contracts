@@ -10,7 +10,7 @@ library JamOrder {
 
     /// @dev Data respresenting a Jam Order.
     struct Data {
-        address from;
+        address taker;
         address receiver;
         uint32 expiry;
         uint256 nonce;
