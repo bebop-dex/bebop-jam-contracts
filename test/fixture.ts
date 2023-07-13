@@ -10,18 +10,19 @@ export async function getFixture () {
   await token2.deployed();
   const token3 = await ERC20Token.deploy('Token 3', 'TOK3');
   await token3.deployed();
-
-  const JamSolver = await ethers.getContractFactory("JamSolver");
-  const solverContract = await JamSolver.deploy();
-  await solverContract.deployed();
   
   const JamSettlement = await ethers.getContractFactory("JamSettlement");
   const settlement = await JamSettlement.deploy();
   await settlement.deployed();
 
+  const JamSolver = await ethers.getContractFactory("JamSolver");
+  const solverContract = await JamSolver.connect(solver).deploy(settlement.address);
+  await solverContract.deployed();
+
   const balanceManagerAddress = await settlement.balanceManager();
   const JamBalanceManager = await ethers.getContractFactory("JamBalanceManager");
   const balanceManager = await JamBalanceManager.attach(balanceManagerAddress);
+
 
   return {
     deployer,

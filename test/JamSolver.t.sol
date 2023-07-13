@@ -8,6 +8,7 @@ import "../src/tests/erc20.sol";
 
 contract JamSolverTest is Test {
     JamSolver solverContract;
+    address internal settlement;
     address internal solver;
     address internal random;
     ERC20Token internal token1;
@@ -16,12 +17,15 @@ contract JamSolverTest is Test {
     function setUp() public {
         solver = address(2);
         random = address(3);
+        settlement = address(4);
         token1 = new ERC20Token('token1', 'TOK1');
         token2 = new ERC20Token('token2', 'TOK2');
         token1.mint(address(this), 10000000);
         token2.mint(address(this), 10000000);
         vm.prank(solver);
-        solverContract = new JamSolver();
+
+        // TODO: tests validating settlement sender and deployer origin
+        solverContract = new JamSolver(settlement);
     }
 
     function testWithdrawTokens() public {

@@ -7,14 +7,26 @@ import "./libraries/JamInteraction.sol";
 
 contract JamSolver {
     using SafeERC20 for IERC20;
-    address private owner;
+    address public owner;
+    address public settlement;
 
-    constructor() {
+    constructor(address _settlement) {
         owner = msg.sender;
+        settlement = _settlement;
     }
 
     modifier onlyOwner() {
         require(msg.sender == owner);
+        _;
+    }
+
+    modifier onlySettlement() {
+        require(msg.sender == settlement);
+        _;
+    }
+
+    modifier onlyOwnerOrigin() {
+        require(tx.origin == owner);
         _;
     }
 
@@ -33,7 +45,7 @@ contract JamSolver {
         }
     }
 
-    function execute (JamInteraction.Data[] calldata calls, address[] calldata outputTokens, uint256[] calldata outputAmounts, address receiver) public {
+    function execute (JamInteraction.Data[] calldata calls, address[] calldata outputTokens, uint256[] calldata outputAmounts, address receiver) public onlyOwnerOrigin onlySettlement {
         for(uint i; i < calls.length; i++) {
             JamInteraction.execute(calls[i]);
         }

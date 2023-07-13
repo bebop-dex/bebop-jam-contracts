@@ -5,6 +5,7 @@ import "hardhat-preprocessor";
 import { HardhatUserConfig, task } from "hardhat/config";
 
 import deploy from "./tasks/deploy";
+import deploySolver from "./tasks/deploySolver";
 
 const POLYGON_PRIVATE_KEY = process.env.POLYGON_PRIVATE_KEY;
 
@@ -17,6 +18,7 @@ function getRemappings() {
 }
 
 task("deploy", "Deploy").setAction(deploy);
+task("deploySolver", "Deploy Solver").addParam('settlement', 'Jam Settlement Contract Address').setAction(deploySolver);
 
 const config: HardhatUserConfig = {
   solidity: {
