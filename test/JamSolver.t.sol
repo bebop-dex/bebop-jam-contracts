@@ -35,7 +35,7 @@ contract JamSolverTest is Test {
         withdrawTokens[0] = address(token1);
         withdrawTokens[1] = address(token2);
         vm.prank(solver);
-        solverContract.wihtdrawTokens(withdrawTokens, solver);
+        solverContract.withdrawTokens(withdrawTokens, solver);
         assertEq(token1.balanceOf(solver), 100);
         assertEq(token2.balanceOf(solver), 500);
     }
@@ -54,6 +54,6 @@ contract JamSolverTest is Test {
 
         vm.prank(random);
         vm.expectRevert();
-        solverContract.wihtdrawTokens(new address[](0), random);
+        solverContract.withdrawTokens(new address[](0), random);
     }
 }

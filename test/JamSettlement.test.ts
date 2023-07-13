@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { waffle } from "hardhat";
+import {network, waffle} from "hardhat";
 import { getFixture } from './fixture'
 import BebopSettlement from './bebop/BebopSettlement.json'
 import { Contract, utils } from "ethers";
@@ -7,7 +7,7 @@ import { JamInteraction, JamOrder, JamHooks, Signature, JamSettlement } from "..
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
 const PARTIAL_ORDER_TYPES = {
-  "PartialOrder": [
+  "Partial": [
     { "name": "expiry", "type": "uint256" },
     { "name": "taker_address", "type": "address" },
     { "name": "maker_address", "type": "address" },
@@ -17,6 +17,7 @@ const PARTIAL_ORDER_TYPES = {
     { "name": "taker_amounts", "type": "uint256[]" },
     { "name": "maker_amounts", "type": "uint256[]" },
     { "name": "receiver", "type": "address" },
+    { "name": "commands", "type": "bytes" }
   ]
 }
 
@@ -60,7 +61,7 @@ describe("JamSettlement", function () {
     bebop = await waffle.deployContract(fixture.deployer, BebopSettlement, [
       '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270',
       '0x000000000022d473030f116ddee9f6b43ac78ba3',
-      '0x6b175474e89094c44da98b954eedeac495271d0f'
+      '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063'
     ])
   });
 
@@ -81,7 +82,7 @@ describe("JamSettlement", function () {
     const BEBOP_DOMAIN = {
       "name": "BebopSettlement",
       "version": "1",
-      "chainId": await user.getChainId(),
+      "chainId": (await user.getChainId()),
       "verifyingContract": bebop.address
     }
 
@@ -94,7 +95,8 @@ describe("JamSettlement", function () {
       "maker_tokens": maker_tokens,
       "taker_amounts": taker_amounts,
       "maker_amounts": maker_amounts,
-      "receiver": receiver
+      "receiver": receiver,
+      "commands": "0x000000"
     }
 
     const maker_sig = await maker._signTypedData(BEBOP_DOMAIN, PARTIAL_ORDER_TYPES, partialOrder)
@@ -108,8 +110,8 @@ describe("JamSettlement", function () {
       "maker_tokens": [maker_tokens],
       "taker_amounts": [taker_amounts],
       "maker_amounts": [maker_amounts],
-      "receivers": [receiver],
-      "using_contract": [false]
+      "receiver": receiver,
+      "commands": "0x000000"
     }
 
     await sellToken1.mint(user.address, taker_amounts[0]);
@@ -159,23 +161,16 @@ describe("JamSettlement", function () {
       hooksHash: hooksHash,
     }
 
-    const transferToSolverToken1 = await sellToken1.populateTransaction.transfer(solverContract.address, jamOrder.sellAmounts[0])
-    const transferToSolverToken2 = await sellToken2.populateTransaction.transfer(solverContract.address, jamOrder.sellAmounts[1])
-
     const executeOnSolverContract = await solverContract.populateTransaction.execute(solverCalls, jamOrder.buyTokens, jamOrder.buyAmounts, settlement.address);
 
     const interactions: JamInteraction.DataStruct[] = [
-      // Transfer sell token 1 to solver contract
-      { result: true, to: transferToSolverToken1.to!, data: transferToSolverToken1.data!, value: 0 },
-      // Transfer sell token 2 to solver contract
-      { result: true, to: transferToSolverToken2.to!, data: transferToSolverToken2.data!, value: 0 },
       // Call execute on solver contract
       { result: true, to: executeOnSolverContract.to!, data: executeOnSolverContract.data!, value: 0}
     ]
 
     const signature = await signJamOrder(user, jamOrder, settlement);
 
-    await settlement.connect(solver).settle(jamOrder, signature, interactions, hooks);
+    await settlement.connect(solver).settle(jamOrder, signature, interactions, hooks, solverContract.address);
 
     const userBalance = await buyToken.balanceOf(jamOrder.receiver);
     const solverContractBalance = await buyToken.balanceOf(solverContract.address);

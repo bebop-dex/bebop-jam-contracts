@@ -35,7 +35,9 @@ const config: HardhatUserConfig = {
     cache: "./cache_hardhat", // Use a different cache for Hardhat than Foundry
   },
   // This fully resolves paths for imports in the ./lib directory for Hardhat
+  // @ts-ignore
   preprocess: {
+    // @ts-ignore
     eachLine: (hre) => ({
       transform: (line: string) => {
         if (line.match(/^\s*import /i)) {

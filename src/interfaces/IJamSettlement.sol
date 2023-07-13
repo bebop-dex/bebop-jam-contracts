@@ -12,5 +12,14 @@ interface IJamSettlement {
     /// tokens can be sent to the receiver.
     /// @param order user signed order
     /// @param interactions list of interactions to settle the order
-    function settle(JamOrder.Data calldata order, Signature.TypedSignature calldata signature, JamInteraction.Data[] calldata interactions, JamHooks.Def calldata hooks) external;
+    /// @param hooks pre and post interactions
+    /// @param balanceRecipient address to receive the initial user's tokens (usually it's solver's contract address)
+
+    function settle(
+        JamOrder.Data calldata order,
+        Signature.TypedSignature calldata signature,
+        JamInteraction.Data[] calldata interactions,
+        JamHooks.Def calldata hooks,
+        address balanceRecipient
+    ) external;
 }

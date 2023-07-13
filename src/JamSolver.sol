@@ -36,7 +36,7 @@ contract JamSolver {
         }
     }
 
-    function wihtdrawTokens (address[] calldata tokens, address receiver) public onlyOwner {
+    function withdrawTokens (address[] calldata tokens, address receiver) public onlyOwner {
         for (uint i; i < tokens.length; i++) {
             IERC20 token = IERC20(tokens[i]);
             if (token.balanceOf(address(this)) > 0) {

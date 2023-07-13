@@ -26,7 +26,7 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning {
     }
 
     function runInteractions(JamInteraction.Data[] calldata interactions) internal returns (bool result) {
-        for (uint i; i < interactions.length; i++) {
+        for (uint i; i < interactions.length; ++i) {
             // Prevent calls to balance manager
             require(interactions[i].to != address(balanceManager));
             bool execResult = JamInteraction.execute(interactions[i]);
@@ -38,14 +38,20 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning {
     }
 
     /// @inheritdoc IJamSettlement
-    function settle(JamOrder.Data calldata order, Signature.TypedSignature calldata signature, JamInteraction.Data[] calldata interactions, JamHooks.Def calldata hooks) external nonReentrant {
+    function settle(
+        JamOrder.Data calldata order,
+        Signature.TypedSignature calldata signature,
+        JamInteraction.Data[] calldata interactions,
+        JamHooks.Def calldata hooks,
+        address balanceRecipient
+    ) external nonReentrant {
         validateOrder(order, hooks, signature);
         require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
-        for (uint i; i < order.sellTokens.length; i ++) {
-            balanceManager.transfer(order.from, address(this), order.sellTokens[i], order.sellAmounts[i]);
+        for (uint i; i < order.sellTokens.length; ++i) {
+            balanceManager.transfer(order.from, balanceRecipient, order.sellTokens[i], order.sellAmounts[i]);
         }
         require(runInteractions(interactions), "INTERACTIONS_FAILED");
-        for (uint i; i < order.buyTokens.length; i ++) {
+        for (uint i; i < order.buyTokens.length; ++i) {
             order.buyTokens[i].safeTransfer(order.receiver, order.buyAmounts[i]);
         }
         require(runInteractions(hooks.afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
