@@ -21,6 +21,9 @@ task("deploy", "Deploy").setAction(deploy);
 task("deploySolver", "Deploy Solver").addParam('settlement', 'Jam Settlement Contract Address').setAction(deploySolver);
 
 const config: HardhatUserConfig = {
+  typechain: {
+    externalArtifacts: ["./test/bebop/BebopSettlement.json"]
+  },
   solidity: {
     version: "0.8.13",
     settings: {
