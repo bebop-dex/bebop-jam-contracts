@@ -15,3 +15,4 @@ typechain-types/
 .DS_Store
 yarn.lock
 .idea
+package-lock.json

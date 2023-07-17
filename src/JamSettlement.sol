@@ -10,6 +10,7 @@ import "./interfaces/IJamSettlement.sol";
 import "./libraries/JamInteraction.sol";
 import "./libraries/JamOrder.sol";
 import "./libraries/JamHooks.sol";
+import "./libraries/JamTransfer.sol";
 
 /// @title JamSettlement
 /// @notice The settlement contract executes the full lifecycle of a trade on chain. It can only be executed by whitelisted addresses (solvers)
@@ -21,8 +22,8 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning {
 
     using SafeERC20 for IERC20;
 
-    constructor() {
-        balanceManager = new JamBalanceManager(address(this));
+    constructor(address _permit2) {
+        balanceManager = new JamBalanceManager(address(this), _permit2);
     }
 
     function runInteractions(JamInteraction.Data[] calldata interactions) internal returns (bool result) {
@@ -43,16 +44,14 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning {
         Signature.TypedSignature calldata signature,
         JamInteraction.Data[] calldata interactions,
         JamHooks.Def calldata hooks,
-        address balanceRecipient
+        JamTransfer.Initial calldata initTransfer
     ) external nonReentrant {
         validateOrder(order, hooks, signature);
         require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
-        for (uint i; i < order.sellTokens.length; ++i) {
-            balanceManager.transfer(order.taker, balanceRecipient, order.sellTokens[i], order.sellAmounts[i]);
-        }
+        balanceManager.transferTokens(order.taker, initTransfer, order.sellTokens, order.sellAmounts);
         require(runInteractions(interactions), "INTERACTIONS_FAILED");
         for (uint i; i < order.buyTokens.length; ++i) {
-            order.buyTokens[i].safeTransfer(order.receiver, order.buyAmounts[i]);
+            IERC20(order.buyTokens[i]).safeTransfer(order.receiver, order.buyAmounts[i]);
         }
         require(runInteractions(hooks.afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
     }

@@ -15,8 +15,8 @@ library JamOrder {
         uint32 expiry;
         uint256 nonce;
         bytes32 hooksHash; // keccak256(pre interactions + post interactions)
-        IERC20[] buyTokens;
-        IERC20[] sellTokens;
+        address[] buyTokens;
+        address[] sellTokens;
         uint256[] sellAmounts;
         uint256[] buyAmounts;
     }

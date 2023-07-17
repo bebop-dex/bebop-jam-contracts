@@ -12,7 +12,7 @@ export async function getFixture () {
   await token3.deployed();
   
   const JamSettlement = await ethers.getContractFactory("JamSettlement");
-  const settlement = await JamSettlement.deploy();
+  const settlement = await JamSettlement.deploy('0x000000000022d473030f116ddee9f6b43ac78ba3');
   await settlement.deployed();
 
   const JamSolver = await ethers.getContractFactory("JamSolver");

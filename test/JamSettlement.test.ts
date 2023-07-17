@@ -1,10 +1,13 @@
 import { expect } from "chai";
-import {network, waffle} from "hardhat";
+import { waffle } from "hardhat";
 import { getFixture } from './fixture'
-import BebopSettlement from './bebop/BebopSettlement.json'
-import { Contract, utils } from "ethers";
-import { JamInteraction, JamOrder, JamHooks, Signature, JamSettlement } from "../typechain-types/src/JamSettlement";
+import BebopSettlementABI from './bebop/BebopSettlement.json'
+import {BigNumber, utils} from "ethers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
+import {AllowanceTransfer, MaxUint160, MaxUint256} from "@uniswap/permit2-sdk";
+import {PermitBatch, PermitDetails} from "@uniswap/permit2-sdk/dist/allowanceTransfer";
+import {JamInteraction, JamOrder, JamHooks, Signature, JamSettlement, JamTransfer} from "../typechain-types/artifacts/src/JamSettlement";
+import {BebopSettlement, Permit2, Permit2__factory} from "../typechain-types";
 
 const PARTIAL_ORDER_TYPES = {
   "Partial": [
@@ -52,24 +55,39 @@ async function signJamOrder(user: SignerWithAddress, order: JamOrder.DataStruct,
   return signature
 }
 
+async function getPermit2Tx(user: SignerWithAddress, permit2Contract: Permit2, tokenAddresses: string[], spender: string){
+  let deadline = (Math.round(Date.now() / 1000) + 12000).toString()
+  let tokenDetails: PermitDetails[] = []
+  for (let i = 0; i < tokenAddresses.length; i++) {
+    tokenDetails.push({
+      token: tokenAddresses[i],
+      amount: MaxUint160,
+      expiration: deadline,
+      nonce: (await permit2Contract.allowance(user.address, tokenAddresses[i], spender)).nonce
+    })
+  }
+
+  let msgPermit2: PermitBatch = {
+    details: tokenDetails,
+    spender: spender,
+    sigDeadline: deadline
+  }
+  let permitMsgTyped = AllowanceTransfer.getPermitData(msgPermit2, permit2Contract.address, await user.getChainId())
+  const { domain, types, values } = permitMsgTyped
+  let signature = await user._signTypedData(domain, types, values)
+  return await  permit2Contract.populateTransaction["permit(address,((address,uint160,uint48,uint48)[],address,uint256),bytes)"](user.address, msgPermit2, signature);
+}
+
 describe("JamSettlement", function () {
   let fixture: Awaited<ReturnType<typeof getFixture>>;
-  let bebop: Contract;
+  let bebop: BebopSettlement;
+  let permit2Contract: Permit2;
 
-  before(async () => {
-    fixture = await getFixture();
-    bebop = await waffle.deployContract(fixture.deployer, BebopSettlement, [
-      '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270',
-      '0x000000000022d473030f116ddee9f6b43ac78ba3',
-      '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063'
-    ])
-  });
-
-  it('Should swap with bebop settlement', async function () {
+  async function bebopSettlement(hooks: JamHooks.DefStruct, needTakerApproval: boolean = true) {
     const { token1: sellToken1, token2: sellToken2, token3: buyToken, user, users, settlement, balanceManager, solver, solverContract } = fixture;
     const maker = users[0]
 
-    const maker_nonce = 100000000;
+    const maker_nonce = Math.floor(Math.random() * 1000000);
     const taker_address = solverContract.address;
     const receiver = solverContract.address;
     const maker_address = maker.address;
@@ -77,7 +95,7 @@ describe("JamSettlement", function () {
     const maker_tokens = [buyToken.address];
     const taker_amounts = [100000000, 200000000];
     const maker_amounts = [500000000];
-    const expiry = Math.floor(Date.now() / 1000) + 100000;
+    const expiry = Math.floor(Date.now() / 1000) + 1000;
 
     const BEBOP_DOMAIN = {
       "name": "BebopSettlement",
@@ -118,13 +136,15 @@ describe("JamSettlement", function () {
     await sellToken2.mint(user.address, taker_amounts[1]);
     await buyToken.mint(maker.address, maker_amounts[0]);
 
-    await sellToken1.connect(user).approve(balanceManager.address, taker_amounts[0]);
-    await sellToken2.connect(user).approve(balanceManager.address, taker_amounts[1]);
+    if (needTakerApproval) {
+      await sellToken1.connect(user).approve(balanceManager.address, taker_amounts[0]);
+      await sellToken2.connect(user).approve(balanceManager.address, taker_amounts[1]);
+    }
     await buyToken.connect(maker).approve(bebop.address, maker_amounts[0]);
 
 
     // Create the settlement transaction with Bebop PMM
-    const settleTx = await bebop.connect(solver).populateTransaction.SettleAggregateOrder(aggregateOrder, { signatureType: 0, signatureBytes: '0x'}, [ { signatureBytesPermit2: '0x', signature: { signatureType: 0, signatureBytes: maker_sig } }])
+    const settleTx = await bebop.populateTransaction.SettleAggregateOrder(aggregateOrder, { signatureType: 0, signatureBytes: '0x'}, [ {  signature: { signatureType: 0, signatureBytes: maker_sig }, usingPermit2: false }])
 
     const bebopApprovalTxToken1 = await sellToken1.populateTransaction.approve(bebop.address, taker_amounts[0])
     const bebopApprovalTxToken2 = await sellToken2.populateTransaction.approve(bebop.address, taker_amounts[1])
@@ -138,16 +158,12 @@ describe("JamSettlement", function () {
       { result: true, to: settleTx.to!, data: settleTx.data!, value: 0 },
     ]
 
-    const hooks: JamHooks.DefStruct = {
-      beforeSettle: [],
-      afterSettle: []
-    }
-    const hooksEncoded = utils.defaultAbiCoder.encode(settlement.interface.getFunction("hashHooks").inputs, [hooks]);
-    const hooksHash = utils.keccak256(hooksEncoded);
-
     // Deduct some coin as solver excess
     const solverExcess = 1000
     const buyAmount = partialOrder.maker_amounts[0] - solverExcess
+
+    const hooksEncoded = utils.defaultAbiCoder.encode(fixture.settlement.interface.getFunction("hashHooks").inputs, [hooks]);
+    const hooksHash = utils.keccak256(hooksEncoded);
 
     const jamOrder: JamOrder.DataStruct = {
       buyAmounts: [buyAmount],
@@ -157,8 +173,13 @@ describe("JamSettlement", function () {
       sellTokens: taker_tokens,
       buyTokens: maker_tokens,
       receiver: user.address,
-      nonce: 123,
+      nonce: Math.floor(Math.random() * 1000000),
       hooksHash: hooksHash,
+    }
+
+    let initTransfer: JamTransfer.InitialStruct = {
+      balanceRecipient: solverContract.address,
+      usingPermit2: !needTakerApproval
     }
 
     const executeOnSolverContract = await solverContract.populateTransaction.execute(solverCalls, jamOrder.buyTokens, jamOrder.buyAmounts, settlement.address);
@@ -170,12 +191,47 @@ describe("JamSettlement", function () {
 
     const signature = await signJamOrder(user, jamOrder, settlement);
 
-    await settlement.connect(solver).settle(jamOrder, signature, interactions, hooks, solverContract.address);
+    const userBalanceBefore: BigNumber = await buyToken.balanceOf(jamOrder.receiver);
+    const solverBalanceBefore: BigNumber = await buyToken.balanceOf(solverContract.address);
 
-    const userBalance = await buyToken.balanceOf(jamOrder.receiver);
-    const solverContractBalance = await buyToken.balanceOf(solverContract.address);
+    await settlement.connect(solver).settle(jamOrder, signature, interactions, hooks, initTransfer);
 
-    expect(userBalance).to.be.equal(jamOrder.buyAmounts[0]);
-    expect(solverContractBalance).to.be.equal(solverExcess);
+    const userBalanceAfter: BigNumber = await buyToken.balanceOf(jamOrder.receiver);
+    const solverBalanceAfter: BigNumber = await buyToken.balanceOf(solverContract.address);
+
+    expect(userBalanceAfter.sub(userBalanceBefore).toString()).to.be.equal(jamOrder.buyAmounts[0].toString());
+    expect(solverBalanceAfter.sub(solverBalanceBefore).toString()).to.be.equal(solverExcess.toString());
+  }
+
+  before(async () => {
+    fixture = await getFixture();
+    bebop = await waffle.deployContract(fixture.deployer, BebopSettlementABI, [
+      '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270',
+      '0x000000000022d473030f116ddee9f6b43ac78ba3',
+      '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063'
+    ]) as BebopSettlement;
+    permit2Contract = Permit2__factory.connect('0x000000000022d473030f116ddee9f6b43ac78ba3', fixture.deployer)
+  });
+
+  it('Should swap with bebop settlement', async function () {
+    const hooks: JamHooks.DefStruct = {
+      beforeSettle: [],
+      afterSettle: []
+    }
+    await bebopSettlement(hooks)
+  });
+
+  it('Should swap with bebop settlement + Permit2 hooks', async function () {
+    await fixture.token1.connect(fixture.user).approve(permit2Contract.address, MaxUint256);
+    await fixture.token2.connect(fixture.user).approve(permit2Contract.address, MaxUint256);
+    const takerPermit2 = await getPermit2Tx(fixture.user, permit2Contract,
+        [fixture.token1.address, fixture.token2.address], fixture.balanceManager.address);
+    const hooks: JamHooks.DefStruct = {
+      beforeSettle: [
+          { result: true, to: takerPermit2.to!, data: takerPermit2.data!, value: 0 },
+      ],
+      afterSettle: []
+    }
+    await bebopSettlement(hooks, false)
   });
 });
