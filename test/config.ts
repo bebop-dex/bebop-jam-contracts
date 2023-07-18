@@ -1,0 +1,11 @@
+// ETH Tokens
+export const TOKENS = {
+    "WETH": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "USDC": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+}
+
+export const PERMIT2_ADDRESS = "0x000000000022d473030f116ddee9f6b43ac78ba3"
+export const BINANCE_ADDRESS = "0x28C6c06298d514Db089934071355E5743bf21d60"
+
+export const ETH_RPC = "https://rpc.ankr.com/eth"
+export const ETH_FOR_BLOCK = 17719907

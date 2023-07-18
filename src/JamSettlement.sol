@@ -51,7 +51,9 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning {
         balanceManager.transferTokens(order.taker, initTransfer, order.sellTokens, order.sellAmounts);
         require(runInteractions(interactions), "INTERACTIONS_FAILED");
         for (uint i; i < order.buyTokens.length; ++i) {
-            IERC20(order.buyTokens[i]).safeTransfer(order.receiver, order.buyAmounts[i]);
+            uint tokenBalance = IERC20(order.buyTokens[i]).balanceOf(address(this));
+            require(tokenBalance >= order.buyAmounts[i], "INSUFFICIENT_TOKEN_BALANCE");
+            IERC20(order.buyTokens[i]).safeTransfer(order.receiver, tokenBalance);
         }
         require(runInteractions(hooks.afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
     }
