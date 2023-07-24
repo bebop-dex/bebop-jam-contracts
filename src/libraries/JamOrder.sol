@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+
+library Commands {
+    bytes1 internal constant SIMPLE_TRANSFER = 0x00;
+    bytes1 internal constant PERMIT2_TRANSFER = 0x01;
+    bytes1 internal constant NATIVE_TRANSFER = 0x02;
+    bytes1 internal constant NFT_ERC721_TRANSFER = 0x03;
+}
 
 /// @title 
 /// @author 
@@ -17,7 +23,9 @@ library JamOrder {
         bytes32 hooksHash; // keccak256(pre interactions + post interactions)
         address[] buyTokens;
         address[] sellTokens;
-        uint256[] sellAmounts;
-        uint256[] buyAmounts;
+        uint256[] sellAmounts; // For ERC721, this is the tokenId
+        uint256[] buyAmounts;  // For ERC721, this is the tokenId
+        bytes buyTokenTransfers; // Command sequence of buyToken transfer types
+        bytes sellTokenTransfers; // Command sequence of sellToken transfer types
     }
 }

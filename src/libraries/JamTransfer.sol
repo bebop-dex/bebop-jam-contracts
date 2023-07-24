@@ -5,6 +5,5 @@ library JamTransfer {
 
     struct Initial {
         address balanceRecipient;
-        bool usingPermit2;
     }
 }

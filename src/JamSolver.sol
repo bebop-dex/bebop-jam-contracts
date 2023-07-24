@@ -15,6 +15,8 @@ contract JamSolver {
         settlement = _settlement;
     }
 
+    receive() external payable {}
+
     modifier onlyOwner() {
         require(msg.sender == owner);
         _;
@@ -45,7 +47,9 @@ contract JamSolver {
         }
     }
 
-    function execute (JamInteraction.Data[] calldata calls, address[] calldata outputTokens, uint256[] calldata outputAmounts, address receiver) public onlyOwnerOrigin onlySettlement {
+    function execute (
+        JamInteraction.Data[] calldata calls, address[] calldata outputTokens, uint256[] calldata outputAmounts, address receiver
+    ) public payable onlyOwnerOrigin onlySettlement {
         for(uint i; i < calls.length; i++) {
             JamInteraction.execute(calls[i]);
         }

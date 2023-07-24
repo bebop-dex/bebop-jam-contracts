@@ -64,6 +64,7 @@ export async function getFixture () {
   console.log("User", user.address)
   console.log("BebopMaker", bebopMaker.address)
   console.log("SolverContract", solverContract.address)
+  console.log("BalanceManager", balanceManager.address)
 
   return {
     deployer,

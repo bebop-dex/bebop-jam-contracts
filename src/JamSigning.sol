@@ -24,22 +24,22 @@ abstract contract JamSigning {
         "JamOrder(address taker,address receiver,uint32 expiry,uint256 nonce,bytes32 hooksHash,address[] buyTokens,address[] sellTokens,uint256[] buyAmounts,uint256[] sellAmounts)"
     ));
 
-    bytes32 public immutable DOMAIN_SEPARATOR;
+    bytes32 private immutable _CACHED_DOMAIN_SEPARATOR;
+    uint256 private immutable _CACHED_CHAIN_ID;
 
     constructor(){
-        uint256 chainId;
-        assembly {
-            chainId := chainid()
-        }
-        DOMAIN_SEPARATOR = keccak256(
-            abi.encode(
-                EIP712_DOMAIN_TYPEHASH,
-                DOMAIN_NAME,
-                DOMAIN_VERSION,
-                chainId,
-                address(this)
-            )
+        _CACHED_CHAIN_ID = block.chainid;
+        _CACHED_DOMAIN_SEPARATOR = keccak256(
+            abi.encode(EIP712_DOMAIN_TYPEHASH, DOMAIN_NAME, DOMAIN_VERSION, block.chainid, address(this))
         );
+    }
+
+    function DOMAIN_SEPARATOR() public view returns (bytes32) {
+        return block.chainid == _CACHED_CHAIN_ID
+            ? _CACHED_DOMAIN_SEPARATOR
+            : keccak256(
+                abi.encode(EIP712_DOMAIN_TYPEHASH, DOMAIN_NAME, DOMAIN_VERSION, block.chainid, address(this))
+            );
     }
 
     function hashHooks(JamHooks.Def memory hooks) public pure returns (bytes32) {
@@ -52,7 +52,7 @@ abstract contract JamSigning {
         keccak256(
             abi.encodePacked(
                 "\x19\x01",
-                DOMAIN_SEPARATOR,
+                DOMAIN_SEPARATOR(),
                 keccak256(
                     abi.encode(
                         JAM_ORDER_TYPE_HASH,
@@ -108,9 +108,9 @@ abstract contract JamSigning {
         if (order.taker != msg.sender) {
             bytes32 hooksHash = hashHooks(hooks);
             bytes32 orderHash = hashOrder(order, hooksHash);
-//            validateSignature(order.taker, orderHash, signature);
+            validateSignature(order.taker, orderHash, signature);
         }
-//        require(block.timestamp < order.expiry, "ORDER_EXPIRED");
+        require(block.timestamp < order.expiry, "ORDER_EXPIRED");
         invalidateNonce(order.nonce);
     }
 

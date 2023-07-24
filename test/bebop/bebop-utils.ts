@@ -24,12 +24,12 @@ const PARTIAL_ORDER_TYPES = {
 export async function getBebopSolverCalls(
     jamOrder: JamOrder.DataStruct,
     bebop: BebopSettlement,
-    solverContract: JamSolver,
+    takerAddress: string,
     maker: SignerWithAddress,
 ){
     const maker_nonce = Math.floor(Math.random() * 1000000);
-    const taker_address = solverContract.address;
-    const receiver = solverContract.address;
+    const taker_address = takerAddress;
+    const receiver = takerAddress;
     const maker_address = maker.address;
     const taker_tokens = jamOrder.sellTokens;
     const maker_tokens = jamOrder.buyTokens;

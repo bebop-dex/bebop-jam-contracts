@@ -1,6 +1,7 @@
 import fs from "fs";
 import "@nomiclabs/hardhat-waffle";
 import "@typechain/hardhat";
+import "hardhat-gas-reporter"
 import "hardhat-preprocessor";
 import { HardhatUserConfig, task } from "hardhat/config";
 
@@ -23,7 +24,7 @@ task("deploySolver", "Deploy Solver").addParam('settlement', 'Jam Settlement Con
 const config: HardhatUserConfig = {
   typechain: {
     externalArtifacts: [
-        "./test/bebop/BebopSettlement.json", "./test/permit2/Permit2.json"
+        "./test/bebop/BebopSettlement.json"
     ]
   },
   solidity: {
