@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
 import "./JamBalanceManager.sol";
 import "./JamSigning.sol";
@@ -20,7 +20,7 @@ import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 /// The contract ensures that only the user agreed price can be executed and otherwise will fail to execute.
 /// As long as the trade is fulfilled, the solver is allowed to keep any potential excess.
 contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, ERC721Holder, ERC1155Holder {
-    IJamBalanceManager public balanceManager;
+    IJamBalanceManager public immutable balanceManager;
 
     using SafeERC20 for IERC20;
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
 import "./interfaces/IJamBalanceManager.sol";
 import "./libraries/JamTransfer.sol";
@@ -15,7 +15,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 /// @notice The reason a balance manager exists is to prevent interaction to the settlement contract draining user funds
 /// By having another contract that allowances are made to, we can enforce that it is only used to draw in user balances to settlement and not sent out
 contract JamBalanceManager is IJamBalanceManager {
-    address operator;
+    address private immutable operator;
 
     using SafeERC20 for IERC20;
 

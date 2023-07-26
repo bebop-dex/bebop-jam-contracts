@@ -1,25 +1,25 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
 import "forge-std/Test.sol";
 
 import "../src/JamSolver.sol";
-import "../src/tests/erc20.sol";
+import "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
 
 contract JamSolverTest is Test {
     JamSolver solverContract;
     address internal settlement;
     address internal solver;
     address internal random;
-    ERC20Token internal token1;
-    ERC20Token internal token2;
+    ERC20PresetMinterPauser internal token1;
+    ERC20PresetMinterPauser internal token2;
 
     function setUp() public {
         solver = address(2);
         random = address(3);
         settlement = address(4);
-        token1 = new ERC20Token('token1', 'TOK1');
-        token2 = new ERC20Token('token2', 'TOK2');
+        token1 = new ERC20PresetMinterPauser('token1', 'TOK1');
+        token2 = new ERC20PresetMinterPauser('token2', 'TOK2');
         token1.mint(address(this), 10000000);
         token2.mint(address(this), 10000000);
         vm.prank(solver);
