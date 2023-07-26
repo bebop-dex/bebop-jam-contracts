@@ -6,4 +6,9 @@ library JamTransfer {
     struct Initial {
         address balanceRecipient;
     }
+
+    struct Indices {
+        uint256 permit2BatchInd;
+        uint256 curNFTsInd;
+    }
 }

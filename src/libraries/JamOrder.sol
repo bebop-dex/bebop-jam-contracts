@@ -7,6 +7,7 @@ library Commands {
     bytes1 internal constant PERMIT2_TRANSFER = 0x01;
     bytes1 internal constant NATIVE_TRANSFER = 0x02;
     bytes1 internal constant NFT_ERC721_TRANSFER = 0x03;
+    bytes1 internal constant NFT_ERC1155_TRANSFER = 0x04;
 }
 
 /// @title 
@@ -23,8 +24,10 @@ library JamOrder {
         bytes32 hooksHash; // keccak256(pre interactions + post interactions)
         address[] buyTokens;
         address[] sellTokens;
-        uint256[] sellAmounts; // For ERC721, this is the tokenId
-        uint256[] buyAmounts;  // For ERC721, this is the tokenId
+        uint256[] sellAmounts;
+        uint256[] buyAmounts;
+        uint256[] sellNFTIds;
+        uint256[] buyNFTIds;
         bytes buyTokenTransfers; // Command sequence of buyToken transfer types
         bytes sellTokenTransfers; // Command sequence of sellToken transfer types
     }

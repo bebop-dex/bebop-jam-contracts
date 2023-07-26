@@ -8,6 +8,7 @@ import "./libraries/common/SafeCast160.sol";
 import "./interfaces/IPermit2.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title JamBalanceManager
@@ -38,45 +39,52 @@ contract JamBalanceManager is IJamBalanceManager {
         JamTransfer.Initial calldata info,
         address[] calldata tokens,
         uint256[] calldata amounts,
+        uint256[] calldata nftIds,
         bytes calldata tokenTransferTypes
     ) onlyOperator(msg.sender) external {
-        require(tokens.length == amounts.length, "INVALID_TOKENS_LENGTH");
-        require(tokens.length == tokenTransferTypes.length, "INVALID_TRANSFERS_LENGTH");
-
         IPermit2.AllowanceTransferDetails[] memory batchTransferDetails;
-        uint permit2BatchInd;
+        JamTransfer.Indices memory indices = JamTransfer.Indices(0, 0);
         for (uint i; i < tokens.length; ++i) {
             if (tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER) {
                 IERC20(tokens[i]).safeTransferFrom(from, info.balanceRecipient, amounts[i]);
             } else if (tokenTransferTypes[i] == Commands.PERMIT2_TRANSFER) {
-                if (permit2BatchInd == 0){
+                if (indices.permit2BatchInd == 0){
                     batchTransferDetails = new IPermit2.AllowanceTransferDetails[](tokens.length - i);
                 }
-                batchTransferDetails[permit2BatchInd] = IPermit2.AllowanceTransferDetails({
+                batchTransferDetails[indices.permit2BatchInd] = IPermit2.AllowanceTransferDetails({
                     from: from,
                     to: info.balanceRecipient,
                     amount: SafeCast160.toUint160(amounts[i]),
                     token: tokens[i]
                 });
-                ++permit2BatchInd;
+                ++indices.permit2BatchInd;
                 continue;
             } else if (tokenTransferTypes[i] == Commands.NATIVE_TRANSFER) {
                 if (info.balanceRecipient != operator){
                     payable(info.balanceRecipient).call{value: amounts[i]}("");
                 }
             } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
-                IERC721(tokens[i]).safeTransferFrom(from, info.balanceRecipient, amounts[i]);
+                require(amounts[i] == 1, "INVALID_ERC721_AMOUNT");
+                IERC721(tokens[i]).safeTransferFrom(from, info.balanceRecipient, nftIds[indices.curNFTsInd]);
+                ++indices.curNFTsInd;
+            } else if (tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
+                IERC1155(tokens[i]).safeTransferFrom(from, info.balanceRecipient, nftIds[indices.curNFTsInd], amounts[i], "");
+                ++indices.curNFTsInd;
             } else {
                 revert("INVALID_TRANSFER_TYPE");
             }
-            if (permit2BatchInd != 0){
+
+            // Shortening batch arrays
+            if (indices.permit2BatchInd != 0){
                 assembly {mstore(batchTransferDetails, sub(mload(batchTransferDetails), 1))}
             }
         }
-        if (permit2BatchInd != 0){
-            require(permit2BatchInd == batchTransferDetails.length, "INVALID_BATCH_PERMIT2_LENGTH");
+        require(indices.curNFTsInd == nftIds.length, "INVALID_NFT_IDS_LENGTH");
+
+        // Batch transfers
+        if (indices.permit2BatchInd != 0){
+            require(indices.permit2BatchInd == batchTransferDetails.length, "INVALID_BATCH_PERMIT2_LENGTH");
             PERMIT2.transferFrom(batchTransferDetails);
         }
-
     }
 }

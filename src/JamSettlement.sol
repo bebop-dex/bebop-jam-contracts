@@ -11,19 +11,48 @@ import "./libraries/JamHooks.sol";
 import "./libraries/JamTransfer.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
+import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 
 /// @title JamSettlement
 /// @notice The settlement contract executes the full lifecycle of a trade on chain. It can only be executed by whitelisted addresses (solvers)
 /// Solvers figure out what "interactions" to pass to this contract such that the user order is fulfilled.
 /// The contract ensures that only the user agreed price can be executed and otherwise will fail to execute.
 /// As long as the trade is fulfilled, the solver is allowed to keep any potential excess.
-contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning {
+contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, ERC721Holder, ERC1155Holder {
     IJamBalanceManager public balanceManager;
 
     using SafeERC20 for IERC20;
 
     constructor(address _permit2) {
         balanceManager = new JamBalanceManager(address(this), _permit2);
+    }
+
+    function transferTokensFromContract(
+        address[] calldata tokens,
+        uint256[] calldata amounts,
+        uint256[] calldata nftIds,
+        bytes calldata tokenTransferTypes,
+        address receiver
+    ) internal {
+        uint nftInd;
+        for (uint i; i < tokens.length; ++i) {
+            if (tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER) {
+                uint tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
+                require(tokenBalance >= amounts[i], "INVALID_OUTPUT_TOKEN_BALANCE");
+                IERC20(tokens[i]).safeTransfer(receiver, tokenBalance);
+            } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
+                uint tokenBalance = IERC721(tokens[i]).balanceOf(address(this));
+                require(amounts[i] == 1 && tokenBalance >= 1, "INVALID_OUTPUT_ERC721_AMOUNT");
+                IERC721(tokens[i]).safeTransferFrom(address(this), receiver, nftIds[nftInd++]);
+            } else if (tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
+                uint tokenBalance = IERC1155(tokens[i]).balanceOf(address(this), nftIds[nftInd]);
+                require(tokenBalance >= amounts[i], "INVALID_OUTPUT_ERC1155_BALANCE");
+                IERC1155(tokens[i]).safeTransferFrom(address(this), receiver, nftIds[nftInd++], tokenBalance, "");
+            } else {
+                revert("INVALID_TRANSFER_TYPE");
+            }
+        }
     }
 
     function runInteractions(JamInteraction.Data[] calldata interactions) internal returns (bool result) {
@@ -48,14 +77,11 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning {
     ) external payable nonReentrant {
         validateOrder(order, hooks, signature);
         require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
-        balanceManager.transferTokens(order.taker, initTransfer, order.sellTokens, order.sellAmounts, order.sellTokenTransfers);
+        balanceManager.transferTokens(
+            order.taker, initTransfer, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
+        );
         require(runInteractions(interactions), "INTERACTIONS_FAILED");
-        for (uint i; i < order.buyTokens.length; ++i) {
-            uint tokenBalance = IERC20(order.buyTokens[i]).balanceOf(address(this));
-            require(tokenBalance >= order.buyAmounts[i], "INSUFFICIENT_TOKEN_BALANCE");
-            // TODO: add ability to buy NFTs
-            IERC20(order.buyTokens[i]).safeTransfer(order.receiver, tokenBalance);
-        }
+        transferTokensFromContract(order.buyTokens, order.buyAmounts, order.buyNFTIds, order.buyTokenTransfers, order.receiver);
         require(runInteractions(hooks.afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
         emit Settlement(msg.sender, order.nonce);
     }

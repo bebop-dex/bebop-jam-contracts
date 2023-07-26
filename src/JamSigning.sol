@@ -42,12 +42,12 @@ abstract contract JamSigning {
             );
     }
 
-    function hashHooks(JamHooks.Def memory hooks) public pure returns (bytes32) {
+    function hashHooks(JamHooks.Def calldata hooks) public pure returns (bytes32) {
         // TODO: optimise with encodePacked? 
         return keccak256(abi.encode(hooks));
     }
 
-    function hashOrder(JamOrder.Data memory order, bytes32 hooksHash) public view returns (bytes32) {
+    function hashOrder(JamOrder.Data calldata order, bytes32 hooksHash) public view returns (bytes32) {
         return
         keccak256(
             abi.encodePacked(
@@ -71,7 +71,7 @@ abstract contract JamSigning {
         );
     }
 
-    function validateSignature(address validationAddress, bytes32 hash, Signature.TypedSignature memory signature) public view {
+    function validateSignature(address validationAddress, bytes32 hash, Signature.TypedSignature calldata signature) public view {
         if (signature.signatureType == Signature.Type.EIP712) {
             (bytes32 r, bytes32 s, uint8 v) = Signature.getRsv(signature.signatureBytes);
             address signer = ecrecover(hash, v, r, s);
@@ -102,7 +102,7 @@ abstract contract JamSigning {
         }
     }
 
-    function validateOrder(JamOrder.Data memory order, JamHooks.Def memory hooks, Signature.TypedSignature memory signature) public {
+    function validateOrder(JamOrder.Data calldata order, JamHooks.Def calldata hooks, Signature.TypedSignature calldata signature) public {
         validateNonce(order.nonce);
         // Allow settle from user without sig
         if (order.taker != msg.sender) {
@@ -110,6 +110,10 @@ abstract contract JamSigning {
             bytes32 orderHash = hashOrder(order, hooksHash);
             validateSignature(order.taker, orderHash, signature);
         }
+        require(order.buyTokens.length == order.buyAmounts.length, "INVALID_BUY_TOKENS_LENGTH");
+        require(order.buyTokens.length == order.buyTokenTransfers.length, "INVALID_BUY_TRANSFERS_LENGTH");
+        require(order.sellTokens.length == order.sellAmounts.length, "INVALID_SELL_TOKENS_LENGTH");
+        require(order.sellTokens.length == order.sellTokenTransfers.length, "INVALID_SELL_TRANSFERS_LENGTH");
         require(block.timestamp < order.expiry, "ORDER_EXPIRED");
         invalidateNonce(order.nonce);
     }
