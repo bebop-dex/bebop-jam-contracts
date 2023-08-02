@@ -5,6 +5,7 @@ import "./JamBalanceManager.sol";
 import "./JamSigning.sol";
 import "./interfaces/IJamBalanceManager.sol";
 import "./interfaces/IJamSettlement.sol";
+import "./interfaces/IWETH.sol";
 import "./libraries/JamInteraction.sol";
 import "./libraries/JamOrder.sol";
 import "./libraries/JamHooks.sol";
@@ -23,10 +24,14 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, ERC721Hol
     IJamBalanceManager public immutable balanceManager;
 
     using SafeERC20 for IERC20;
+    address private immutable wrappedToken;
 
-    constructor(address _permit2) {
+    constructor(address _permit2, address _wrappedToken) {
         balanceManager = new JamBalanceManager(address(this), _permit2);
+        wrappedToken = _wrappedToken;
     }
+
+    receive() external payable {}
 
     function transferTokensFromContract(
         address[] calldata tokens,
@@ -41,6 +46,17 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, ERC721Hol
                 uint tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
                 require(tokenBalance >= amounts[i], "INVALID_OUTPUT_TOKEN_BALANCE");
                 IERC20(tokens[i]).safeTransfer(receiver, tokenBalance);
+            } else if (tokenTransferTypes[i] == Commands.NATIVE_TRANSFER || tokenTransferTypes[i] == Commands.UNWRAP_AND_TRANSFER){
+                require(tokens[i] == wrappedToken, "INVALID_OUTPUT_TOKEN");
+                uint tokenBalance;
+                if (tokenTransferTypes[i] == Commands.UNWRAP_AND_TRANSFER) {
+                    tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
+                    IWETH(wrappedToken).withdraw(tokenBalance);
+                }
+                tokenBalance = address(this).balance;
+                require(tokenBalance >= amounts[i], "INVALID_OUTPUT_NATIVE_BALANCE");
+                (bool sent, ) = payable(receiver).call{value: tokenBalance}("");
+                require(sent, "FAILED_TO_SEND_ETH");
             } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
                 uint tokenBalance = IERC721(tokens[i]).balanceOf(address(this));
                 require(amounts[i] == 1 && tokenBalance >= 1, "INVALID_OUTPUT_ERC721_AMOUNT");

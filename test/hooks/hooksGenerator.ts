@@ -70,4 +70,10 @@ export class HooksGenerator {
         return await wrappedTokenContract.populateTransaction["deposit()"]({value: amount})
     }
 
+    async getHook_unwrap(amount: BigNumberish){
+        await this.prepareData()
+        let wrappedTokenContract = new Contract(chainConstants[this.chainId!].wrappedToken, Wrapped, this.user)
+        return await wrappedTokenContract.populateTransaction["withdraw(uint256)"](amount)
+    }
+
 }

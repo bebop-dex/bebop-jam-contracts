@@ -1,10 +1,10 @@
 import {ethers, network} from "hardhat";
 import {expect} from "chai";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {BINANCE_ADDRESS, ETH_FOR_BLOCK, ETH_RPC, PERMIT2_ADDRESS, TOKENS} from "../config";
+import {BINANCE_ADDRESS, ETH_FOR_BLOCK, ETH_RPC, NFTS_ERC1155, NFTS_ERC721, PERMIT2_ADDRESS, TOKENS} from "../config";
 
 
-async function getFunds(walletsWithFunds: SignerWithAddress[]){
+async function getFunds(walletsWithFunds: SignerWithAddress[], solverAddr: string){
   let amount = ethers.utils.parseEther("100") // ETH
   for (let wallet of walletsWithFunds) {
     // Get 100 WETH
@@ -30,6 +30,18 @@ async function getFunds(walletsWithFunds: SignerWithAddress[]){
       expect(await tokenContract.balanceOf(wallet.address)).to.equal(tokenBalance);
     }
   }
+  for (let token of Object.values(NFTS_ERC721)) {
+    const binance = await ethers.provider.getSigner(BINANCE_ADDRESS);
+    let tokenContract = await ethers.getContractAt("IERC721", token.address)
+    await tokenContract.connect(binance).transferFrom(BINANCE_ADDRESS, solverAddr, token.id);
+    expect(await tokenContract.balanceOf(solverAddr)).to.equal(1);
+  }
+  for (let token of Object.values(NFTS_ERC1155)) {
+    const binance = await ethers.provider.getSigner(BINANCE_ADDRESS);
+    let tokenContract = await ethers.getContractAt("IERC1155", token.address)
+    await tokenContract.connect(binance).safeTransferFrom(BINANCE_ADDRESS, solverAddr, token.id, token.amount, "0x");
+    expect(await tokenContract.balanceOf(solverAddr, token.id)).to.equal(token.amount);
+  }
 }
 
 export async function getFixture () {
@@ -48,7 +60,7 @@ export async function getFixture () {
   const [deployer, solver, user, bebopMaker, ...users] = await ethers.getSigners();
 
   const JamSettlement = await ethers.getContractFactory("JamSettlement");
-  const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS);
+  const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS, TOKENS.WETH);
   await settlement.deployed();
 
   const JamSolver = await ethers.getContractFactory("JamSolver");
@@ -60,7 +72,7 @@ export async function getFixture () {
   const balanceManager = await JamBalanceManager.attach(balanceManagerAddress);
 
   let walletsWithFunds = [user, bebopMaker]
-  await getFunds(walletsWithFunds)
+  await getFunds(walletsWithFunds, solverContract.address)
   console.log("User", user.address)
   console.log("BebopMaker", bebopMaker.address)
   console.log("SolverContract", solverContract.address)

@@ -6,8 +6,9 @@ library Commands {
     bytes1 internal constant SIMPLE_TRANSFER = 0x00;
     bytes1 internal constant PERMIT2_TRANSFER = 0x01;
     bytes1 internal constant NATIVE_TRANSFER = 0x02;
-    bytes1 internal constant NFT_ERC721_TRANSFER = 0x03;
-    bytes1 internal constant NFT_ERC1155_TRANSFER = 0x04;
+    bytes1 internal constant UNWRAP_AND_TRANSFER = 0x03;
+    bytes1 internal constant NFT_ERC721_TRANSFER = 0x04;
+    bytes1 internal constant NFT_ERC1155_TRANSFER = 0x05;
 }
 
 /// @title 
