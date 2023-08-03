@@ -14,6 +14,7 @@ export enum Commands {
 
 const AMOUNTS = {
     "WETH_1": ethers.utils.parseUnits("1", 18).toString(),
+    "DAI_1": ethers.utils.parseUnits("1000", 18).toString(),
     "USDC_1": ethers.utils.parseUnits("123", 6).toString(),
 }
 
@@ -25,6 +26,23 @@ export function getOrder(orderType: string, takerAddress: string, sellCommands: 
             sellTokens: [TOKENS.WETH],
             buyTokens: [TOKENS.USDC],
             sellAmounts: [AMOUNTS.WETH_1],
+            buyAmounts: [AMOUNTS.USDC_1],
+            sellNFTIds: [],
+            buyNFTIds: [],
+            taker: takerAddress,
+            receiver: takerAddress,
+            nonce: nonce,
+            expiry,
+            hooksHash: "",
+            buyTokenTransfers: "0x" + buyCommands.join(""),
+            sellTokenTransfers: "0x" + sellCommands.join("")
+        }
+    }
+    if (orderType === "UsingDaiPermit"){
+        return {
+            sellTokens: [TOKENS.DAI],
+            buyTokens: [TOKENS.USDC],
+            sellAmounts: [AMOUNTS.DAI_1],
             buyAmounts: [AMOUNTS.USDC_1],
             sellNFTIds: [],
             buyNFTIds: [],
@@ -79,6 +97,40 @@ export function getOrder(orderType: string, takerAddress: string, sellCommands: 
             buyAmounts: [NFTS_ERC1155.opensea.amount],
             sellNFTIds: [],
             buyNFTIds: [NFTS_ERC1155.opensea.id],
+            taker: takerAddress,
+            receiver: takerAddress,
+            nonce: nonce,
+            expiry,
+            hooksHash: "",
+            buyTokenTransfers: "0x" + buyCommands.join(""),
+            sellTokenTransfers: "0x" + sellCommands.join("")
+        }
+    }
+    if (orderType === "SellERC721"){
+        return {
+            sellTokens: [NFTS_ERC721.Card.address],
+            buyTokens: [TOKENS.WETH],
+            sellAmounts: [1],
+            buyAmounts: [AMOUNTS.WETH_1],
+            sellNFTIds: [NFTS_ERC721.Card.id],
+            buyNFTIds: [],
+            taker: takerAddress,
+            receiver: takerAddress,
+            nonce: nonce,
+            expiry,
+            hooksHash: "",
+            buyTokenTransfers: "0x" + buyCommands.join(""),
+            sellTokenTransfers: "0x" + sellCommands.join("")
+        }
+    }
+    if (orderType === "SellERC1155"){
+        return {
+            sellTokens: [NFTS_ERC1155.hub.address],
+            buyTokens: [TOKENS.WETH],
+            sellAmounts: [NFTS_ERC1155.hub.amount],
+            buyAmounts: [AMOUNTS.WETH_1],
+            sellNFTIds: [NFTS_ERC1155.hub.id],
+            buyNFTIds: [],
             taker: takerAddress,
             receiver: takerAddress,
             nonce: nonce,

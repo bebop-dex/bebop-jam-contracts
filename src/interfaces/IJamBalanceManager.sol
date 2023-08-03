@@ -9,12 +9,14 @@ interface IJamBalanceManager {
     /// @dev Transfer from this contract to another
     ///
     /// @param from address to transfer form
-    /// @param info JamTransfer.Initial info about transfer receiver and type of transfer
+    /// @param receiver address
     /// @param tokens tokens' addresses
     /// @param amounts tokens' amounts
+    /// @param nftIds NFTs' ids
+    /// @param transferTypes command sequence of transfer types
     function transferTokens(
         address from,
-        JamTransfer.Initial calldata info,
+        address receiver,
         address[] calldata tokens,
         uint256[] calldata amounts,
         uint256[] calldata nftIds,

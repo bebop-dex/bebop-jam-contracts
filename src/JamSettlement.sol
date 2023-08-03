@@ -89,12 +89,12 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, ERC721Hol
         Signature.TypedSignature calldata signature,
         JamInteraction.Data[] calldata interactions,
         JamHooks.Def calldata hooks,
-        JamTransfer.Initial calldata initTransfer
+        address balanceRecipient
     ) external payable nonReentrant {
         validateOrder(order, hooks, signature);
         require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
         balanceManager.transferTokens(
-            order.taker, initTransfer, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
+            order.taker, balanceRecipient, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
         );
         require(runInteractions(interactions), "INTERACTIONS_FAILED");
         transferTokensFromContract(order.buyTokens, order.buyAmounts, order.buyNFTIds, order.buyTokenTransfers, order.receiver);

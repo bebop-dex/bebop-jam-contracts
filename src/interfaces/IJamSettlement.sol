@@ -17,12 +17,12 @@ interface IJamSettlement {
     /// @param order user signed order
     /// @param interactions list of interactions to settle the order
     /// @param hooks pre and post interactions
-    /// @param initTransfer info about transfers from user to solver
+    /// @param balanceRecipient receiver of the balance
     function settle(
         JamOrder.Data calldata order,
         Signature.TypedSignature calldata signature,
         JamInteraction.Data[] calldata interactions,
         JamHooks.Def calldata hooks,
-        JamTransfer.Initial calldata initTransfer
+        address balanceRecipient
     ) external payable;
 }

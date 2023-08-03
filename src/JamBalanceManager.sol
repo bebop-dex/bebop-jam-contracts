@@ -36,7 +36,7 @@ contract JamBalanceManager is IJamBalanceManager {
     /// @inheritdoc IJamBalanceManager
     function transferTokens(
         address from,
-        JamTransfer.Initial calldata info,
+        address receiver,
         address[] calldata tokens,
         uint256[] calldata amounts,
         uint256[] calldata nftIds,
@@ -46,29 +46,29 @@ contract JamBalanceManager is IJamBalanceManager {
         JamTransfer.Indices memory indices = JamTransfer.Indices(0, 0);
         for (uint i; i < tokens.length; ++i) {
             if (tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER) {
-                IERC20(tokens[i]).safeTransferFrom(from, info.balanceRecipient, amounts[i]);
+                IERC20(tokens[i]).safeTransferFrom(from, receiver, amounts[i]);
             } else if (tokenTransferTypes[i] == Commands.PERMIT2_TRANSFER) {
                 if (indices.permit2BatchInd == 0){
                     batchTransferDetails = new IPermit2.AllowanceTransferDetails[](tokens.length - i);
                 }
                 batchTransferDetails[indices.permit2BatchInd] = IPermit2.AllowanceTransferDetails({
                     from: from,
-                    to: info.balanceRecipient,
+                    to: receiver,
                     amount: SafeCast160.toUint160(amounts[i]),
                     token: tokens[i]
                 });
                 ++indices.permit2BatchInd;
                 continue;
             } else if (tokenTransferTypes[i] == Commands.NATIVE_TRANSFER) {
-                if (info.balanceRecipient != operator){
-                    payable(info.balanceRecipient).call{value: amounts[i]}("");
+                if (receiver != operator){
+                    payable(receiver).call{value: amounts[i]}("");
                 }
             } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
                 require(amounts[i] == 1, "INVALID_ERC721_AMOUNT");
-                IERC721(tokens[i]).safeTransferFrom(from, info.balanceRecipient, nftIds[indices.curNFTsInd]);
+                IERC721(tokens[i]).safeTransferFrom(from, receiver, nftIds[indices.curNFTsInd]);
                 ++indices.curNFTsInd;
             } else if (tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
-                IERC1155(tokens[i]).safeTransferFrom(from, info.balanceRecipient, nftIds[indices.curNFTsInd], amounts[i], "");
+                IERC1155(tokens[i]).safeTransferFrom(from, receiver, nftIds[indices.curNFTsInd], amounts[i], "");
                 ++indices.curNFTsInd;
             } else {
                 revert("INVALID_TRANSFER_TYPE");

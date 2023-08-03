@@ -68,6 +68,7 @@ export async function getBalancesBefore(tokens: string[], receiver: string, buyT
 export async function verifyBalancesAfter(
     tokens: string[],
     receiver: string,
+    sellTokensTransfers: Commands[],
     buyTokensTransfers: Commands[],
     solverAddress: string,
     solverContractType: SolverContractType,
@@ -89,7 +90,8 @@ export async function verifyBalancesAfter(
             }
         }
         expect(userBalanceAfter.sub(userBalancesBefore[token])).to.be.equal(BigNumber.from(amounts[i]).add(usingSolverContract ? 0 : solverExcess))
-        if (solverContractType !== SolverContractType.ERC721 && solverContractType !== SolverContractType.ERC1155) {
+        if (!sellTokensTransfers.includes(Commands.NFT_ERC721_TRANSFER) && !sellTokensTransfers.includes(Commands.NFT_ERC1155_TRANSFER) &&
+            solverContractType !== SolverContractType.ERC721 && solverContractType !== SolverContractType.ERC1155) {
             let solverBalanceAfter = await (await ethers.getContractAt("ERC20", token)).balanceOf(solverAddress)
             expect(solverBalanceAfter.sub(solverBalancesBefore[token])).to.be.equal(usingSolverContract ? solverExcess : 0) // solver excess
         }

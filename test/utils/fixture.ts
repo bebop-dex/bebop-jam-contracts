@@ -33,14 +33,16 @@ async function getFunds(walletsWithFunds: SignerWithAddress[], solverAddr: strin
   for (let token of Object.values(NFTS_ERC721)) {
     const binance = await ethers.provider.getSigner(BINANCE_ADDRESS);
     let tokenContract = await ethers.getContractAt("IERC721", token.address)
-    await tokenContract.connect(binance).transferFrom(BINANCE_ADDRESS, solverAddr, token.id);
-    expect(await tokenContract.balanceOf(solverAddr)).to.equal(1);
+    let receiver = token.to === "solver" ? solverAddr : walletsWithFunds[0].address
+    await tokenContract.connect(binance).transferFrom(BINANCE_ADDRESS, receiver, token.id);
+    expect(await tokenContract.balanceOf(receiver)).to.equal(1);
   }
   for (let token of Object.values(NFTS_ERC1155)) {
     const binance = await ethers.provider.getSigner(BINANCE_ADDRESS);
     let tokenContract = await ethers.getContractAt("IERC1155", token.address)
-    await tokenContract.connect(binance).safeTransferFrom(BINANCE_ADDRESS, solverAddr, token.id, token.amount, "0x");
-    expect(await tokenContract.balanceOf(solverAddr, token.id)).to.equal(token.amount);
+    let receiver = token.to === "solver" ? solverAddr : walletsWithFunds[0].address
+    await tokenContract.connect(binance).safeTransferFrom(BINANCE_ADDRESS, receiver, token.id, token.amount, "0x");
+    expect(await tokenContract.balanceOf(receiver, token.id)).to.equal(token.amount);
   }
 }
 
@@ -71,7 +73,7 @@ export async function getFixture () {
   const JamBalanceManager = await ethers.getContractFactory("JamBalanceManager");
   const balanceManager = await JamBalanceManager.attach(balanceManagerAddress);
 
-  let walletsWithFunds = [user, bebopMaker]
+  let walletsWithFunds = [user, bebopMaker, solver]
   await getFunds(walletsWithFunds, solverContract.address)
   console.log("User", user.address)
   console.log("BebopMaker", bebopMaker.address)
