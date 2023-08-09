@@ -7,7 +7,6 @@ export enum Commands {
     SIMPLE_TRANSFER = "00",
     PERMIT2_TRANSFER ="01",
     NATIVE_TRANSFER = "02",
-    UNWRAP_AND_TRANSFER = "03",
     NFT_ERC721_TRANSFER = "04",
     NFT_ERC1155_TRANSFER = "05"
 }

@@ -85,13 +85,13 @@ describe("JamSettlement", function () {
     )
     const signature = await signJamOrder(user, jamOrder, settlement);
 
-    // let [userBalancesBefore, solverBalancesBefore] = await getBalancesBefore(
-    //     jamOrder.buyTokens, jamOrder.receiver, buyTokensTransfers, solverContract.address, solverContractType)
+    let [userBalancesBefore, solverBalancesBefore] = await getBalancesBefore(
+        jamOrder.buyTokens, jamOrder.receiver, buyTokensTransfers, solverContract.address, solverContractType)
 
     await settlement.connect(executor).settle(jamOrder, signature, interactions, hooks, balanceRecipient, {value: nativeTokenAmount.toString()});
 
-    // await verifyBalancesAfter(jamOrder.buyTokens, jamOrder.receiver, sellTokensTransfers, buyTokensTransfers, solverContract.address,
-    //     solverContractType, jamOrder.buyAmounts, solverExcess, userBalancesBefore, solverBalancesBefore)
+    await verifyBalancesAfter(jamOrder.buyTokens, jamOrder.receiver, sellTokensTransfers, buyTokensTransfers, solverContract.address,
+        solverContractType, jamOrder.buyAmounts, solverExcess, userBalancesBefore, solverBalancesBefore)
   }
 
   before(async () => {
@@ -158,18 +158,18 @@ describe("JamSettlement", function () {
     await settle(jamOrder, fixture.solverContract.address, hooks, solverCalls, sellTokenTransfers, buyTokenTransfers, SolverContractType.ERC20, true)
   });
 
-  // it('Taker execution with Native token', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.NATIVE_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let jamOrder: JamOrder.DataStruct = getOrder("SellNative", fixture.user.address, sellTokenTransfers, buyTokenTransfers)!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.settlement.address, fixture.bebopMaker, fixture.user.address)
-  //
-  //   const hooks: JamHooks.DefStruct = {
-  //     beforeSettle: [],
-  //     afterSettle: []
-  //   }
-  //   await settle(jamOrder, fixture.settlement.address, hooks, solverCalls, sellTokenTransfers, buyTokenTransfers, SolverContractType.NONE)
-  // });
+  it('Taker execution with Native token', async function () {
+    let sellTokenTransfers: Commands[] = [Commands.NATIVE_TRANSFER]
+    let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let jamOrder: JamOrder.DataStruct = getOrder("SellNative", fixture.user.address, sellTokenTransfers, buyTokenTransfers)!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.settlement.address, fixture.bebopMaker, fixture.user.address)
+
+    const hooks: JamHooks.DefStruct = {
+      beforeSettle: [],
+      afterSettle: []
+    }
+    await settle(jamOrder, fixture.settlement.address, hooks, solverCalls, sellTokenTransfers, buyTokenTransfers, SolverContractType.NONE)
+  });
 
   it('Native token transfer to taker', async function () {
     let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]

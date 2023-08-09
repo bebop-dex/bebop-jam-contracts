@@ -73,14 +73,14 @@ contract JamBalanceManager is IJamBalanceManager {
                 revert("INVALID_TRANSFER_TYPE");
             }
 
-            // Shortening batch arrays
+            // Shortening array
             if (indices.permit2BatchInd != 0){
                 assembly {mstore(batchTransferDetails, sub(mload(batchTransferDetails), 1))}
             }
         }
         require(indices.curNFTsInd == nftIds.length, "INVALID_NFT_IDS_LENGTH");
 
-        // Batch transfers
+        // Batch transfer
         if (indices.permit2BatchInd != 0){
             require(indices.permit2BatchInd == batchTransferDetails.length, "INVALID_BATCH_PERMIT2_LENGTH");
             PERMIT2.transferFrom(batchTransferDetails);

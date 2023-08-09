@@ -1,6 +1,6 @@
 import {JamInteraction} from "../../typechain-types/artifacts/src/JamSettlement";
 import {JamOrder} from "../../typechain-types/artifacts/src/JamSigning";
-import {BebopSettlement, JamSolver} from "../../typechain-types";
+import {BebopSettlement} from "../../typechain-types";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers, network} from "hardhat";
 import {BigNumber} from "ethers";
@@ -50,11 +50,18 @@ export async function getBebopSolverCalls(
             commands += "00"
         }
     }
+
+    let nativeTokenAmount = BigNumber.from(0)
+    let solverCalls: JamInteraction.DataStruct[] = []
     for (let i = 0; i < jamOrder.sellTokens.length; i++){
         if (jamOrder.sellTokens[i] === TOKENS.ETH){
             taker_tokens.push(TOKENS.WETH)
+            nativeTokenAmount = nativeTokenAmount.add(taker_amounts[i])
             commands += "01"
         } else {
+            let tokenContract = await ethers.getContractAt("ERC20", jamOrder.sellTokens[i])
+            const bebopApprovalTxToken = await tokenContract.populateTransaction.approve(bebop.address, taker_amounts[i])
+            solverCalls.push({ result: true, to: bebopApprovalTxToken.to!, data: bebopApprovalTxToken.data!, value: 0 })
             taker_tokens.push(jamOrder.sellTokens[i])
             commands += "00"
         }
@@ -105,13 +112,6 @@ export async function getBebopSolverCalls(
         [ {  signature: { signatureType: 0, signatureBytes: maker_sig }, usingPermit2: false }]
     )
 
-    let solverCalls: JamInteraction.DataStruct[] = []
-    for (let i = 0; i < taker_tokens.length; i++){
-        let tokenContract = await ethers.getContractAt("ERC20", taker_tokens[i])
-        const bebopApprovalTxToken = await tokenContract.populateTransaction.approve(bebop.address, taker_amounts[i])
-        solverCalls.push({ result: true, to: bebopApprovalTxToken.to!, data: bebopApprovalTxToken.data!, value: 0 })
-    }
-
-    solverCalls.push({ result: true, to: settleTx.to!, data: settleTx.data!, value: 0 })
+    solverCalls.push({ result: true, to: settleTx.to!, data: settleTx.data!, value: nativeTokenAmount.toString() })
     return solverCalls
 }
