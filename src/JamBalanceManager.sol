@@ -20,6 +20,7 @@ contract JamBalanceManager is IJamBalanceManager {
     using SafeERC20 for IERC20;
 
     IPermit2 private immutable PERMIT2;
+    address private constant NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     constructor(address _operator, address _permit2) {
         // Operator can be defined at creation time with `msg.sender` 
@@ -51,25 +52,23 @@ contract JamBalanceManager is IJamBalanceManager {
                 if (indices.permit2BatchInd == 0){
                     batchTransferDetails = new IPermit2.AllowanceTransferDetails[](tokens.length - i);
                 }
-                batchTransferDetails[indices.permit2BatchInd] = IPermit2.AllowanceTransferDetails({
+                batchTransferDetails[indices.permit2BatchInd++] = IPermit2.AllowanceTransferDetails({
                     from: from,
                     to: receiver,
                     amount: SafeCast160.toUint160(amounts[i]),
                     token: tokens[i]
                 });
-                ++indices.permit2BatchInd;
                 continue;
             } else if (tokenTransferTypes[i] == Commands.NATIVE_TRANSFER) {
+                require(tokens[i] == NATIVE_TOKEN, "INVALID_NATIVE_TOKEN_ADDRESS");
                 if (receiver != operator){
                     payable(receiver).call{value: amounts[i]}("");
                 }
             } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
                 require(amounts[i] == 1, "INVALID_ERC721_AMOUNT");
-                IERC721(tokens[i]).safeTransferFrom(from, receiver, nftIds[indices.curNFTsInd]);
-                ++indices.curNFTsInd;
+                IERC721(tokens[i]).safeTransferFrom(from, receiver, nftIds[indices.curNFTsInd++]);
             } else if (tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
-                IERC1155(tokens[i]).safeTransferFrom(from, receiver, nftIds[indices.curNFTsInd], amounts[i], "");
-                ++indices.curNFTsInd;
+                IERC1155(tokens[i]).safeTransferFrom(from, receiver, nftIds[indices.curNFTsInd++], amounts[i], "");
             } else {
                 revert("INVALID_TRANSFER_TYPE");
             }

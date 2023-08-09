@@ -5,9 +5,9 @@ import {BINANCE_ADDRESS, ETH_FOR_BLOCK, ETH_RPC, NFTS_ERC1155, NFTS_ERC721, PERM
 
 
 async function getFunds(walletsWithFunds: SignerWithAddress[], solverAddr: string){
-  let amount = ethers.utils.parseEther("100") // ETH
+  let amount = ethers.utils.parseEther("90") // ETH
   for (let wallet of walletsWithFunds) {
-    // Get 100 WETH
+    // Get 90 WETH
     await wallet.sendTransaction({
       to: TOKENS.WETH,
       value: amount
@@ -17,7 +17,7 @@ async function getFunds(walletsWithFunds: SignerWithAddress[], solverAddr: strin
 
     // Get other tokens
     for (let token of Object.values(TOKENS)) {
-      if (token === TOKENS.WETH) continue;
+      if (token === TOKENS.WETH || token === TOKENS.ETH) continue;
       await network.provider.request({
         method: "hardhat_impersonateAccount",
         params: [BINANCE_ADDRESS],
@@ -62,7 +62,7 @@ export async function getFixture () {
   const [deployer, solver, user, bebopMaker, ...users] = await ethers.getSigners();
 
   const JamSettlement = await ethers.getContractFactory("JamSettlement");
-  const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS, TOKENS.WETH);
+  const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS);
   await settlement.deployed();
 
   const JamSolver = await ethers.getContractFactory("JamSolver");

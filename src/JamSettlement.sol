@@ -24,18 +24,18 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, ERC721Hol
     IJamBalanceManager public immutable balanceManager;
 
     using SafeERC20 for IERC20;
-    address private immutable wrappedToken;
+    address private constant NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
-    constructor(address _permit2, address _wrappedToken) {
+    constructor(address _permit2) {
         balanceManager = new JamBalanceManager(address(this), _permit2);
-        wrappedToken = _wrappedToken;
     }
 
     receive() external payable {}
 
-    function transferTokensFromContract(
+    function verifyBalances(
         address[] calldata tokens,
         uint256[] calldata amounts,
+        uint256[] memory initialAmounts,
         uint256[] calldata nftIds,
         bytes calldata tokenTransferTypes,
         address receiver
@@ -43,32 +43,43 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, ERC721Hol
         uint nftInd;
         for (uint i; i < tokens.length; ++i) {
             if (tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER) {
-                uint tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
-                require(tokenBalance >= amounts[i], "INVALID_OUTPUT_TOKEN_BALANCE");
-                IERC20(tokens[i]).safeTransfer(receiver, tokenBalance);
-            } else if (tokenTransferTypes[i] == Commands.NATIVE_TRANSFER || tokenTransferTypes[i] == Commands.UNWRAP_AND_TRANSFER){
-                require(tokens[i] == wrappedToken, "INVALID_OUTPUT_TOKEN");
-                uint tokenBalance;
-                if (tokenTransferTypes[i] == Commands.UNWRAP_AND_TRANSFER) {
-                    tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
-                    IWETH(wrappedToken).withdraw(tokenBalance);
-                }
-                tokenBalance = address(this).balance;
-                require(tokenBalance >= amounts[i], "INVALID_OUTPUT_NATIVE_BALANCE");
-                (bool sent, ) = payable(receiver).call{value: tokenBalance}("");
-                require(sent, "FAILED_TO_SEND_ETH");
+                uint tokenBalance = IERC20(tokens[i]).balanceOf(receiver);
+                require(tokenBalance - initialAmounts[i] >= amounts[i], "INVALID_OUTPUT_TOKEN_BALANCE");
+            } else if (tokenTransferTypes[i] == Commands.NATIVE_TRANSFER){
+                uint tokenBalance = receiver.balance;
+                require(tokenBalance - initialAmounts[i] >= amounts[i], "INVALID_OUTPUT_NATIVE_BALANCE");
             } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
-                uint tokenBalance = IERC721(tokens[i]).balanceOf(address(this));
-                require(amounts[i] == 1 && tokenBalance >= 1, "INVALID_OUTPUT_ERC721_AMOUNT");
-                IERC721(tokens[i]).safeTransferFrom(address(this), receiver, nftIds[nftInd++]);
+                require(IERC721(tokens[i]).ownerOf(nftIds[nftInd++]) == receiver, "INVALID_ERC721_RECEIVER");
             } else if (tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
-                uint tokenBalance = IERC1155(tokens[i]).balanceOf(address(this), nftIds[nftInd]);
-                require(tokenBalance >= amounts[i], "INVALID_OUTPUT_ERC1155_BALANCE");
-                IERC1155(tokens[i]).safeTransferFrom(address(this), receiver, nftIds[nftInd++], tokenBalance, "");
+                uint tokenBalance = IERC1155(tokens[i]).balanceOf(receiver, nftIds[nftInd++]);
+                require(tokenBalance - initialAmounts[i] >= amounts[i], "INVALID_OUTPUT_ERC1155_BALANCE");
             } else {
                 revert("INVALID_TRANSFER_TYPE");
             }
         }
+    }
+
+    function getInitialBalances(
+        address[] calldata tokens,
+        uint256[] calldata nftIds,
+        bytes calldata tokenTransferTypes,
+        address receiver
+    ) internal returns (uint256[] memory initialBalances){
+        uint256[] memory initialBalances = new uint256[](tokens.length);
+        uint nftInd;
+        for (uint i; i < tokens.length; ++i) {
+            if (tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER) {
+                initialBalances[i] = IERC20(tokens[i]).balanceOf(receiver);
+            } else if (tokenTransferTypes[i] == Commands.NATIVE_TRANSFER){
+                require(tokens[i] == NATIVE_TOKEN, "INVALID_OUTPUT_TOKEN");
+                initialBalances[i] = receiver.balance;
+            } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
+                ++nftInd;
+            } else if (tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
+                initialBalances[i] = IERC1155(tokens[i]).balanceOf(receiver, nftIds[nftInd++]);
+            }
+        }
+        return initialBalances;
     }
 
     function runInteractions(JamInteraction.Data[] calldata interactions) internal returns (bool result) {
@@ -96,8 +107,11 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, ERC721Hol
         balanceManager.transferTokens(
             order.taker, balanceRecipient, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
         );
+        uint256[] memory initialReceiverBalances = getInitialBalances(
+            order.buyTokens,order.buyNFTIds, order.buyTokenTransfers, order.receiver
+        );
         require(runInteractions(interactions), "INTERACTIONS_FAILED");
-        transferTokensFromContract(order.buyTokens, order.buyAmounts, order.buyNFTIds, order.buyTokenTransfers, order.receiver);
+        verifyBalances(order.buyTokens, order.buyAmounts, initialReceiverBalances, order.buyNFTIds, order.buyTokenTransfers, order.receiver);
         require(runInteractions(hooks.afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
         emit Settlement(msg.sender, order.nonce);
     }
