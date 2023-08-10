@@ -26,12 +26,11 @@ export async function getBebopSolverCalls(
     jamOrder: JamOrder.DataStruct,
     bebop: BebopSettlement,
     takerAddress: string,
-    maker: SignerWithAddress,
-    userReceiver: string | null = null,
+    maker: SignerWithAddress
 ){
     const maker_nonce = Math.floor(Math.random() * 1000000);
     const taker_address = takerAddress;
-    const receiver = userReceiver ?? takerAddress;
+    const receiver = takerAddress;
     const maker_address = maker.address;
     const taker_amounts = jamOrder.sellAmounts;
     const expiry = Math.floor(Date.now() / 1000) + 1000;

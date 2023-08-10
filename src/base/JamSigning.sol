@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import "./libraries/JamInteraction.sol";
-import "./libraries/JamOrder.sol";
-import "./libraries/JamHooks.sol";
-import "./libraries/Signature.sol";
+import "../libraries/JamInteraction.sol";
+import "../libraries/JamOrder.sol";
+import "../libraries/JamHooks.sol";
+import "../libraries/Signature.sol";
 import "@openzeppelin/contracts/interfaces/IERC1271.sol";
 
 abstract contract JamSigning {
