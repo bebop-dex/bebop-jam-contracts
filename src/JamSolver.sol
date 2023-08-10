@@ -9,11 +9,13 @@ import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import "hardhat/console.sol";
 
 contract JamSolver is ERC721Holder, ERC1155Holder{
     using SafeERC20 for IERC20;
     address public owner;
     address public settlement;
+    address private constant NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     constructor(address _settlement) {
         owner = msg.sender;
@@ -59,8 +61,12 @@ contract JamSolver is ERC721Holder, ERC1155Holder{
             JamInteraction.execute(calls[i]);
         }
         for(uint i; i < outputTokens.length; i++) {
-            IERC20 token = IERC20(outputTokens[i]);
-            token.transfer(receiver, outputAmounts[i]);
+            if (outputTokens[i] == NATIVE_TOKEN) {
+                payable(receiver).call{value: outputAmounts[i]}("");
+            } else {
+                IERC20 token = IERC20(outputTokens[i]);
+                token.transfer(receiver, outputAmounts[i]);
+            }
         }
     }
 

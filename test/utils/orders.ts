@@ -7,7 +7,6 @@ export enum Commands {
     SIMPLE_TRANSFER = "00",
     PERMIT2_TRANSFER ="01",
     NATIVE_TRANSFER = "02",
-    UNWRAP_AND_TRANSFER = "03",
     NFT_ERC721_TRANSFER = "04",
     NFT_ERC1155_TRANSFER = "05"
 }
@@ -55,10 +54,44 @@ export function getOrder(orderType: string, takerAddress: string, sellCommands: 
             sellTokenTransfers: "0x" + sellCommands.join("")
         }
     }
-    if (orderType === "BuyNative"){
+    if (orderType === "SimpleReverse"){
         return {
             sellTokens: [TOKENS.USDC],
             buyTokens: [TOKENS.WETH],
+            sellAmounts: [AMOUNTS.USDC_1],
+            buyAmounts: [AMOUNTS.WETH_1],
+            sellNFTIds: [],
+            buyNFTIds: [],
+            taker: takerAddress,
+            receiver: takerAddress,
+            nonce: nonce,
+            expiry,
+            hooksHash: "",
+            buyTokenTransfers: "0x" + buyCommands.join(""),
+            sellTokenTransfers: "0x" + sellCommands.join("")
+        }
+    }
+    if (orderType === "SellNative"){
+        return {
+            sellTokens: [TOKENS.ETH],
+            buyTokens: [TOKENS.USDC],
+            sellAmounts: [AMOUNTS.WETH_1],
+            buyAmounts: [AMOUNTS.USDC_1],
+            sellNFTIds: [],
+            buyNFTIds: [],
+            taker: takerAddress,
+            receiver: takerAddress,
+            nonce: nonce,
+            expiry,
+            hooksHash: "",
+            buyTokenTransfers: "0x" + buyCommands.join(""),
+            sellTokenTransfers: "0x" + sellCommands.join("")
+        }
+    }
+    if (orderType === "BuyNative"){
+        return {
+            sellTokens: [TOKENS.USDC],
+            buyTokens: [TOKENS.ETH],
             sellAmounts: [AMOUNTS.USDC_1],
             buyAmounts: [AMOUNTS.WETH_1],
             sellNFTIds: [],

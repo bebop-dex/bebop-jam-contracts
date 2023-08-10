@@ -1,9 +1,10 @@
 import {JamInteraction} from "../../typechain-types/artifacts/src/JamSettlement";
 import {JamOrder} from "../../typechain-types/artifacts/src/JamSigning";
-import {BebopSettlement, JamSolver} from "../../typechain-types";
+import {BebopSettlement} from "../../typechain-types";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers, network} from "hardhat";
 import {BigNumber} from "ethers";
+import {TOKENS} from "../config";
 
 
 const PARTIAL_ORDER_TYPES = {
@@ -25,20 +26,44 @@ export async function getBebopSolverCalls(
     jamOrder: JamOrder.DataStruct,
     bebop: BebopSettlement,
     takerAddress: string,
-    maker: SignerWithAddress,
+    maker: SignerWithAddress
 ){
     const maker_nonce = Math.floor(Math.random() * 1000000);
     const taker_address = takerAddress;
     const receiver = takerAddress;
     const maker_address = maker.address;
-    const taker_tokens = jamOrder.sellTokens;
-    const maker_tokens = jamOrder.buyTokens;
     const taker_amounts = jamOrder.sellAmounts;
     const expiry = Math.floor(Date.now() / 1000) + 1000;
     const solverExcess = 1000;
     let maker_amounts = []
-    for (let i = 0; i < maker_tokens.length; i++){
+    let taker_tokens = [];
+    let maker_tokens = [];
+    let commands = "0x"
+    for (let i = 0; i < jamOrder.buyTokens.length; i++){
         maker_amounts.push(BigNumber.from(jamOrder.buyAmounts[i]).add(solverExcess).toString());
+        if (jamOrder.buyTokens[i] === TOKENS.ETH){
+            maker_tokens.push(TOKENS.WETH)
+            commands += "01"
+        } else {
+            maker_tokens.push(jamOrder.buyTokens[i])
+            commands += "00"
+        }
+    }
+
+    let nativeTokenAmount = BigNumber.from(0)
+    let solverCalls: JamInteraction.DataStruct[] = []
+    for (let i = 0; i < jamOrder.sellTokens.length; i++){
+        if (jamOrder.sellTokens[i] === TOKENS.ETH){
+            taker_tokens.push(TOKENS.WETH)
+            nativeTokenAmount = nativeTokenAmount.add(taker_amounts[i])
+            commands += "01"
+        } else {
+            let tokenContract = await ethers.getContractAt("ERC20", jamOrder.sellTokens[i])
+            const bebopApprovalTxToken = await tokenContract.populateTransaction.approve(bebop.address, taker_amounts[i])
+            solverCalls.push({ result: true, to: bebopApprovalTxToken.to!, data: bebopApprovalTxToken.data!, value: 0 })
+            taker_tokens.push(jamOrder.sellTokens[i])
+            commands += "00"
+        }
     }
 
     const BEBOP_DOMAIN = {
@@ -58,7 +83,7 @@ export async function getBebopSolverCalls(
         "taker_amounts": taker_amounts,
         "maker_amounts": maker_amounts,
         "receiver": receiver,
-        "commands": "0x" + "00".repeat(taker_tokens.length + maker_tokens.length)
+        "commands": commands
     }
     const maker_sig = await maker._signTypedData(BEBOP_DOMAIN, PARTIAL_ORDER_TYPES, partialOrder)
     for (let i = 0; i < maker_tokens.length; i++){
@@ -77,7 +102,7 @@ export async function getBebopSolverCalls(
         "taker_amounts": [taker_amounts],
         "maker_amounts": [maker_amounts],
         "receiver": receiver,
-        "commands": "0x" + "00".repeat(taker_tokens.length + maker_tokens.length)
+        "commands": commands
     }
 
     const settleTx = await bebop.populateTransaction.SettleAggregateOrder(
@@ -86,13 +111,6 @@ export async function getBebopSolverCalls(
         [ {  signature: { signatureType: 0, signatureBytes: maker_sig }, usingPermit2: false }]
     )
 
-    let solverCalls: JamInteraction.DataStruct[] = []
-    for (let i = 0; i < taker_tokens.length; i++){
-        let tokenContract = await ethers.getContractAt("ERC20", taker_tokens[i])
-        const bebopApprovalTxToken = await tokenContract.populateTransaction.approve(bebop.address, taker_amounts[i])
-        solverCalls.push({ result: true, to: bebopApprovalTxToken.to!, data: bebopApprovalTxToken.data!, value: 0 })
-    }
-
-    solverCalls.push({ result: true, to: settleTx.to!, data: settleTx.data!, value: 0 })
+    solverCalls.push({ result: true, to: settleTx.to!, data: settleTx.data!, value: nativeTokenAmount.toString() })
     return solverCalls
 }
