@@ -10,7 +10,7 @@ import {
 } from "../typechain-types/artifacts/src/JamSettlement";
 import {BebopSettlement} from "../typechain-types";
 import {PERMIT2_ADDRESS, TOKENS} from "./config";
-import {approveTokens, getBalancesBefore, signJamOrder, SolverContractType, verifyBalancesAfter} from "./utils/utils";
+import {getBalancesBefore, signJamOrder, SolverContractType, verifyBalancesAfter} from "./utils/utils";
 import {Commands, getOrder} from "./utils/orders";
 import {getBebopSolverCalls} from "./bebop/bebop-utils";
 import {HooksGenerator} from "./hooks/hooksGenerator";
@@ -29,15 +29,29 @@ describe("JamSettlement", function () {
       sellTokensTransfers: Commands[],
       buyTokensTransfers: Commands[],
       solverContractType: SolverContractType = SolverContractType.ERC20,
-      skipTakerApprovals: boolean = false,
-      directSettle: boolean = false
+      skipTakerApprovals: boolean = false
   ) {
     const { user, settlement, solver, solverContract } = fixture;
 
     // Approving takers tokens
     let nativeTokenAmount = BigNumber.from(0)
     if (!skipTakerApprovals) {
-      nativeTokenAmount = await approveTokens(jamOrder.sellTokens, jamOrder.sellAmounts, sellTokensTransfers, user, fixture.balanceManager.address);
+      for (let i = 0; i < jamOrder.sellTokens.length; i++) {
+        let curTokenContract = await ethers.getContractAt("ERC20", jamOrder.sellTokens[i])
+        if (sellTokensTransfers[i] === Commands.SIMPLE_TRANSFER) {
+          await curTokenContract.connect(fixture.user).approve(fixture.balanceManager.address, jamOrder.sellAmounts[i]);
+        } else if (sellTokensTransfers[i] === Commands.PERMIT2_TRANSFER) {
+          await curTokenContract.connect(fixture.user).approve(PERMIT2_ADDRESS, jamOrder.sellAmounts[i]);
+        } else if (sellTokensTransfers[i] === Commands.NATIVE_TRANSFER) {
+          nativeTokenAmount = nativeTokenAmount.add(BigNumber.from(jamOrder.sellAmounts[i]))
+        } else if (sellTokensTransfers[i] === Commands.NFT_ERC721_TRANSFER) {
+          let nftTokenContract = await ethers.getContractAt("IERC721", jamOrder.sellTokens[i])
+          await nftTokenContract.connect(fixture.user).setApprovalForAll(fixture.balanceManager.address, true);
+        } else if (sellTokensTransfers[i] === Commands.NFT_ERC1155_TRANSFER) {
+          let nftTokenContract = await ethers.getContractAt("IERC1155", jamOrder.sellTokens[i])
+          await nftTokenContract.connect(fixture.user).setApprovalForAll(fixture.balanceManager.address, true);
+        }
+      }
     }
 
     let interactions: JamInteraction.DataStruct[];
@@ -47,15 +61,15 @@ describe("JamSettlement", function () {
       let executeOnSolverContract;
       if (solverContractType === SolverContractType.ERC20) {
         executeOnSolverContract = await solverContract.populateTransaction.execute(
-            solverCalls, jamOrder.buyTokens, jamOrder.buyAmounts, settlement.address
+            solverCalls, jamOrder.buyTokens, jamOrder.buyAmounts, jamOrder.receiver
         );
       } else if (solverContractType === SolverContractType.ERC721){
         executeOnSolverContract = await solverContract.populateTransaction.executeWithERC721(
-            solverCalls, jamOrder.buyTokens, jamOrder.buyNFTIds, settlement.address
+            solverCalls, jamOrder.buyTokens, jamOrder.buyNFTIds, jamOrder.receiver
         );
       } else {
         executeOnSolverContract = await solverContract.populateTransaction.executeWithERC1155(
-            solverCalls, jamOrder.buyTokens, jamOrder.buyNFTIds, jamOrder.buyAmounts, settlement.address
+            solverCalls, jamOrder.buyTokens, jamOrder.buyNFTIds, jamOrder.buyAmounts, jamOrder.receiver
         );
       }
       interactions = [
@@ -74,15 +88,10 @@ describe("JamSettlement", function () {
     let [userBalancesBefore, solverBalancesBefore] = await getBalancesBefore(
         jamOrder.buyTokens, jamOrder.receiver, buyTokensTransfers, solverContract.address, solverContractType)
 
-    if (directSettle) {
-      await approveTokens(jamOrder.buyTokens, jamOrder.buyAmounts, buyTokensTransfers, fixture.bebopMaker, fixture.balanceManager.address)
-      await settlement.connect(fixture.bebopMaker).settleInternal(jamOrder, signature, interactions, hooks, {value: nativeTokenAmount.toString()});
-    } else {
-      await settlement.connect(executor).settle(jamOrder, signature, interactions, hooks, balanceRecipient, {value: nativeTokenAmount.toString()});
-    }
+    await settlement.connect(executor).settle(jamOrder, signature, interactions, hooks, balanceRecipient, {value: nativeTokenAmount.toString()});
 
     await verifyBalancesAfter(jamOrder.buyTokens, jamOrder.receiver, sellTokensTransfers, buyTokensTransfers, solverContract.address,
-        solverContractType, jamOrder.buyAmounts, solverExcess, userBalancesBefore, solverBalancesBefore, directSettle)
+        solverContractType, jamOrder.buyAmounts, solverExcess, userBalancesBefore, solverBalancesBefore)
   }
 
   before(async () => {
@@ -153,7 +162,7 @@ describe("JamSettlement", function () {
     let sellTokenTransfers: Commands[] = [Commands.NATIVE_TRANSFER]
     let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
     let jamOrder: JamOrder.DataStruct = getOrder("SellNative", fixture.user.address, sellTokenTransfers, buyTokenTransfers)!
-    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.settlement.address, fixture.bebopMaker)
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.settlement.address, fixture.bebopMaker, fixture.user.address)
 
     const hooks: JamHooks.DefStruct = {
       beforeSettle: [],
@@ -226,19 +235,5 @@ describe("JamSettlement", function () {
     }
     await settle(jamOrder, fixture.solverContract.address, hooks, solverCalls, sellTokenTransfers, buyTokenTransfers, SolverContractType.ERC20)
   });
-
-  it('settleInternal', async function () {
-    let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-    let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-    let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, sellTokenTransfers, buyTokenTransfers)!
-    let solverCalls: JamInteraction.DataStruct[] = []
-    const hooks: JamHooks.DefStruct = {
-      beforeSettle: [],
-      afterSettle: []
-    }
-    await settle(jamOrder, "0x", hooks, solverCalls, sellTokenTransfers,
-        buyTokenTransfers, SolverContractType.NONE, false, true)
-  });
-
 
 });

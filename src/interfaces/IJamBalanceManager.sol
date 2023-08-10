@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
 
+import "../libraries/JamTransfer.sol";
+
 /// @title IJamBalanceManager
 /// @notice User approvals are made here. This handles the complexity of multiple allowance types. 
 interface IJamBalanceManager {

@@ -16,8 +16,6 @@ library Commands {
 /// @notice 
 library JamOrder {
 
-    address internal constant NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-
     /// @dev Data respresenting a Jam Order.
     struct Data {
         address taker;

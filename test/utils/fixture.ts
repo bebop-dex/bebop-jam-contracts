@@ -59,7 +59,7 @@ export async function getFixture () {
     ],
   });
 
-  const [deployer, solver, user, bebopMaker, directMaker, ...users] = await ethers.getSigners();
+  const [deployer, solver, user, bebopMaker, ...users] = await ethers.getSigners();
 
   const JamSettlement = await ethers.getContractFactory("JamSettlement");
   const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS);
@@ -73,14 +73,12 @@ export async function getFixture () {
   const JamBalanceManager = await ethers.getContractFactory("JamBalanceManager");
   const balanceManager = await JamBalanceManager.attach(balanceManagerAddress);
 
-  let walletsWithFunds = [user, bebopMaker, directMaker, solver]
+  let walletsWithFunds = [user, bebopMaker, solver]
   await getFunds(walletsWithFunds, solverContract.address)
   console.log("User", user.address)
   console.log("BebopMaker", bebopMaker.address)
-  console.log("DirectMaker", directMaker.address)
   console.log("SolverContract", solverContract.address)
   console.log("BalanceManager", balanceManager.address)
-  console.log("Settlement", settlement.address)
 
   return {
     deployer,
