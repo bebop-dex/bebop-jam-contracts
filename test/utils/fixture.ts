@@ -1,7 +1,16 @@
 import {ethers, network} from "hardhat";
 import {expect} from "chai";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {BINANCE_ADDRESS, ETH_FOR_BLOCK, ETH_RPC, NFTS_ERC1155, NFTS_ERC721, PERMIT2_ADDRESS, TOKENS} from "../config";
+import {
+  BINANCE_ADDRESS,
+  ETH_FOR_BLOCK,
+  ETH_RPC,
+  NFT_COLLECTOR,
+  NFTS_ERC1155,
+  NFTS_ERC721,
+  PERMIT2_ADDRESS,
+  TOKENS
+} from "../config";
 
 
 async function getFunds(walletsWithFunds: SignerWithAddress[], solverAddr: string){
@@ -30,18 +39,28 @@ async function getFunds(walletsWithFunds: SignerWithAddress[], solverAddr: strin
       expect(await tokenContract.balanceOf(wallet.address)).to.equal(tokenBalance);
     }
   }
+  const getReceiverAddress = (to: string) => {
+    if (to === "solver") return solverAddr;
+    if (to === "taker") return walletsWithFunds[0].address;
+    if (to === "maker") return walletsWithFunds[2].address;
+    return ""
+  }
+  await network.provider.request({
+    method: "hardhat_impersonateAccount",
+    params: [NFT_COLLECTOR],
+  });
   for (let token of Object.values(NFTS_ERC721)) {
-    const binance = await ethers.provider.getSigner(BINANCE_ADDRESS);
+    const binance = await ethers.provider.getSigner(NFT_COLLECTOR);
     let tokenContract = await ethers.getContractAt("IERC721", token.address)
-    let receiver = token.to === "solver" ? solverAddr : walletsWithFunds[0].address
-    await tokenContract.connect(binance).transferFrom(BINANCE_ADDRESS, receiver, token.id);
+    let receiver = getReceiverAddress(token.to)
+    await tokenContract.connect(binance).transferFrom(NFT_COLLECTOR, receiver, token.id);
     expect(await tokenContract.balanceOf(receiver)).to.equal(1);
   }
   for (let token of Object.values(NFTS_ERC1155)) {
-    const binance = await ethers.provider.getSigner(BINANCE_ADDRESS);
+    const binance = await ethers.provider.getSigner(NFT_COLLECTOR);
     let tokenContract = await ethers.getContractAt("IERC1155", token.address)
-    let receiver = token.to === "solver" ? solverAddr : walletsWithFunds[0].address
-    await tokenContract.connect(binance).safeTransferFrom(BINANCE_ADDRESS, receiver, token.id, token.amount, "0x");
+    let receiver = getReceiverAddress(token.to)
+    await tokenContract.connect(binance).safeTransferFrom(NFT_COLLECTOR, receiver, token.id, token.amount, "0x");
     expect(await tokenContract.balanceOf(receiver, token.id)).to.equal(token.amount);
   }
 }
@@ -89,6 +108,7 @@ export async function getFixture () {
     user,
     bebopMaker,
     settlement,
-    balanceManager
+    balanceManager,
+    directMaker
   }
 }

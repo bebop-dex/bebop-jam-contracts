@@ -7,13 +7,6 @@ import {expect} from "chai";
 import {NFTS_ERC1155, PERMIT2_ADDRESS} from "../config";
 import {token} from "../../typechain-types/artifacts/lib/openzeppelin-contracts/contracts";
 
-export enum SolverContractType {
-    NONE,
-    ERC20,
-    ERC721,
-    ERC1155
-}
-
 const JAM_ORDER_TYPES = {
     "JamOrder": [
         { "name": "taker", "type": "address" },
@@ -69,24 +62,26 @@ export async function approveTokens(
     return nativeTokenAmount
 }
 
-export async function getBalancesBefore(tokens: string[], receiver: string, buyTokensTransfers: Commands[], solverAddress: string, solverContractType: SolverContractType) {
+export async function getBalancesBefore(
+    tokens: string[], receiver: string, buyTokensTransfers: Commands[], buyNFTsIds: BigNumberish[], solverAddress: string
+) {
     let userBalancesBefore: {[id:string]: BigNumberish} = {}
     let solverBalancesBefore: {[id:string]: BigNumberish} = {}
+    let nftId = 0
     for (let [i, token] of tokens.entries()) {
         if (buyTokensTransfers[i] === Commands.NATIVE_TRANSFER) {
             userBalancesBefore[token] = await ethers.provider.getBalance(receiver)
-            if (solverContractType !== SolverContractType.ERC1155 && solverContractType !== SolverContractType.ERC721) {
-                solverBalancesBefore[token] = await ethers.provider.getBalance(solverAddress)
-            }
+            solverBalancesBefore[token] = await ethers.provider.getBalance(solverAddress)
+        } else if (buyTokensTransfers[i] === Commands.NFT_ERC721_TRANSFER) {
+            userBalancesBefore[token] = await (await ethers.getContractAt("IERC721", token)).balanceOf(receiver)
+            solverBalancesBefore[token] = await (await ethers.getContractAt("IERC721", token)).balanceOf(solverAddress)
+            nftId++
+        } else if (buyTokensTransfers[i] === Commands.NFT_ERC1155_TRANSFER) {
+            userBalancesBefore[token] = await (await ethers.getContractAt("IERC1155", token)).balanceOf(receiver, buyNFTsIds[nftId])
+            solverBalancesBefore[token] = await (await ethers.getContractAt("IERC1155", token)).balanceOf(solverAddress, buyNFTsIds[nftId++])
         } else {
-            if (solverContractType === SolverContractType.ERC1155) {
-                userBalancesBefore[token] = await (await ethers.getContractAt("IERC1155", token)).balanceOf(receiver, NFTS_ERC1155.opensea.id)
-            } else {
-                userBalancesBefore[token] = await (await ethers.getContractAt("ERC20", token)).balanceOf(receiver)
-            }
-            if (solverContractType !== SolverContractType.ERC1155 && solverContractType !== SolverContractType.ERC721) {
-                solverBalancesBefore[token] = await (await ethers.getContractAt("ERC20", token)).balanceOf(solverAddress)
-            }
+            userBalancesBefore[token] = await (await ethers.getContractAt("ERC20", token)).balanceOf(receiver)
+            solverBalancesBefore[token] = await (await ethers.getContractAt("ERC20", token)).balanceOf(solverAddress)
         }
     }
     return [userBalancesBefore, solverBalancesBefore]
@@ -98,36 +93,39 @@ export async function verifyBalancesAfter(
     receiver: string,
     sellTokensTransfers: Commands[],
     buyTokensTransfers: Commands[],
+    buyNFTsIds: BigNumberish[],
     solverAddress: string,
-    solverContractType: SolverContractType,
+    usingSolverContract: boolean,
     amounts: BigNumberish[],
     solverExcess: BigNumberish,
     userBalancesBefore: {[id:string]: BigNumberish},
     solverBalancesBefore: {[id:string]: BigNumberish},
     internalSettle: boolean
 ){
-    let takerGetExcess = solverContractType === SolverContractType.NONE && !internalSettle
+    let takerGetExcess = !usingSolverContract && !internalSettle
+    let nftId = 0
     for (let [i, token] of tokens.entries()) {
         let userBalanceAfter;
+        let solverBalanceAfter;
+
         if (buyTokensTransfers[i] === Commands.NATIVE_TRANSFER) {
             userBalanceAfter = await ethers.provider.getBalance(receiver)
+            solverBalanceAfter = await ethers.provider.getBalance(solverAddress)
+        } else if (buyTokensTransfers[i] === Commands.NFT_ERC721_TRANSFER) {
+            userBalanceAfter = await (await ethers.getContractAt("IERC721", token)).balanceOf(receiver)
+            solverBalanceAfter = await (await ethers.getContractAt("IERC721", token)).balanceOf(solverAddress)
+            nftId++
+        } else if (buyTokensTransfers[i] === Commands.NFT_ERC1155_TRANSFER) {
+            userBalanceAfter = await (await ethers.getContractAt("IERC1155", token)).balanceOf(receiver, buyNFTsIds[nftId])
+            solverBalanceAfter = await (await ethers.getContractAt("IERC1155", token)).balanceOf(solverAddress, buyNFTsIds[nftId++])
         } else {
-            if (solverContractType === SolverContractType.ERC1155) {
-                userBalanceAfter = await (await ethers.getContractAt("IERC1155", token)).balanceOf(receiver, NFTS_ERC1155.opensea.id)
-            } else {
-                userBalanceAfter = await (await ethers.getContractAt("ERC20", token)).balanceOf(receiver)
+            userBalanceAfter = await (await ethers.getContractAt("ERC20", token)).balanceOf(receiver)
+            solverBalanceAfter = await (await ethers.getContractAt("ERC20", token)).balanceOf(solverAddress)
+            if (usingSolverContract &&
+                !(sellTokensTransfers.includes(Commands.NFT_ERC721_TRANSFER) || sellTokensTransfers.includes(Commands.NFT_ERC1155_TRANSFER))){
+                expect(solverBalanceAfter.sub(solverBalancesBefore[token])).to.be.equal(solverExcess)
             }
         }
         expect(userBalanceAfter.sub(userBalancesBefore[token])).to.be.equal(BigNumber.from(amounts[i]).add(takerGetExcess ? solverExcess : 0))
-        if (!sellTokensTransfers.includes(Commands.NFT_ERC721_TRANSFER) && !sellTokensTransfers.includes(Commands.NFT_ERC1155_TRANSFER) &&
-            solverContractType !== SolverContractType.ERC721 && solverContractType !== SolverContractType.ERC1155) {
-            let solverBalanceAfter;
-            if (buyTokensTransfers.includes(Commands.NATIVE_TRANSFER)){
-                solverBalanceAfter = await ethers.provider.getBalance(solverAddress)
-            } else {
-                solverBalanceAfter = await (await ethers.getContractAt("ERC20", token)).balanceOf(solverAddress)
-            }
-            expect(solverBalanceAfter.sub(solverBalancesBefore[token])).to.be.equal(solverContractType !== SolverContractType.NONE ? solverExcess : 0) // solver excess
-        }
     }
 }
