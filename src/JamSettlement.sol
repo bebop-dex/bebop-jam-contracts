@@ -59,14 +59,13 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
             order.buyTokens, order.buyAmounts, order.buyNFTIds, order.buyTokenTransfers, order.receiver
         );
         require(runInteractions(hooks.afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
-        emit Settlement(msg.sender, order.nonce);
+        emit Settlement(order.nonce);
     }
 
     /// @inheritdoc IJamSettlement
     function settleInternal(
         JamOrder.Data calldata order,
         Signature.TypedSignature calldata signature,
-        JamInteraction.Data[] calldata interactions,
         JamHooks.Def calldata hooks
     ) external payable nonReentrant {
         validateOrder(order, hooks, signature);
@@ -78,6 +77,6 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
             msg.sender, order.receiver, order.buyTokens, order.buyAmounts, order.buyNFTIds, order.buyTokenTransfers
         );
         require(runInteractions(hooks.afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
-        emit Settlement(msg.sender, order.nonce);
+        emit Settlement(order.nonce);
     }
 }

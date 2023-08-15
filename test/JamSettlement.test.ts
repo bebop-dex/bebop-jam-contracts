@@ -5,7 +5,12 @@ import {BigNumber, utils} from "ethers";
 import {JamHooks, JamInteraction, JamOrder, JamSettlement} from "../typechain-types/artifacts/src/JamSettlement";
 import {BebopSettlement} from "../typechain-types";
 import {PERMIT2_ADDRESS, TOKENS} from "./config";
-import {approveTokens, getBalancesBefore, signJamOrder, verifyBalancesAfter} from "./utils/utils";
+import {
+  approveTokens,
+  getBalancesBefore,
+  signJamOrder,
+  verifyBalancesAfter
+} from "./utils/utils";
 import {Commands, getOrder} from "./utils/orders";
 import {getBebopSolverCalls} from "./bebop/bebop-utils";
 import {HooksGenerator} from "./hooks/hooksGenerator";
@@ -64,8 +69,8 @@ describe("JamSettlement", function () {
         jamOrder.buyTokens, jamOrder.receiver, buyTokensTransfers, jamOrder.buyNFTIds, solverContract.address)
 
     if (directSettle) {
-      await approveTokens(jamOrder.buyTokens, jamOrder.buyAmounts, buyTokensTransfers, directMaker, fixture.balanceManager.address)
-      await settlement.connect(directMaker).settleInternal(jamOrder, signature, interactions, hooks, {value: nativeTokenAmount.toString()});
+      nativeTokenAmount = await approveTokens(jamOrder.buyTokens, jamOrder.buyAmounts, buyTokensTransfers, directMaker, fixture.balanceManager.address)
+      await settlement.connect(directMaker).settleInternal(jamOrder, signature, hooks, {value: nativeTokenAmount.toString()});
     } else {
       await settlement.connect(executor).settle(jamOrder, signature, interactions, hooks, balanceRecipient, {value: nativeTokenAmount.toString()});
     }
@@ -265,6 +270,15 @@ describe("JamSettlement", function () {
     let jamOrder: JamOrder.DataStruct = getOrder("NFTs-to-NFTs", fixture.user.address, sellTokenTransfers, buyTokenTransfers)!
     let solverCalls: JamInteraction.DataStruct[] = []
     await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers)
+  });
+
+  it('NFT-to-NFT+ETH', async function () {
+    let sellTokenTransfers: Commands[] = [Commands.NFT_ERC721_TRANSFER]
+    let buyTokenTransfers: Commands[] = [Commands.NATIVE_TRANSFER, Commands.NFT_ERC721_TRANSFER]
+    let jamOrder: JamOrder.DataStruct = getOrder("NFT-to-NFT+ETH", fixture.user.address, sellTokenTransfers, buyTokenTransfers)!
+    let solverCalls: JamInteraction.DataStruct[] = []
+    await settle(jamOrder, "0x", emptyHooks, solverCalls, sellTokenTransfers,
+        buyTokenTransfers, false, false, true)
   });
 
 

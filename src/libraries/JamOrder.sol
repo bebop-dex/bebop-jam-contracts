@@ -11,9 +11,7 @@ library Commands {
     bytes1 internal constant NFT_ERC1155_TRANSFER = 0x05;
 }
 
-/// @title 
-/// @author 
-/// @notice 
+/// @title JamOrder
 library JamOrder {
 
     address internal constant NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;

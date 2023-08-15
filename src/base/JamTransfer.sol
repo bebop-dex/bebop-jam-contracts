@@ -8,10 +8,18 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+/// @title JamTransfer
+/// @notice Functions for transferring tokens from SettlementContract
 abstract contract JamTransfer {
 
     using SafeERC20 for IERC20;
 
+    /// @dev Transfer tokens from this contract to receiver
+    /// @param tokens tokens' addresses
+    /// @param amounts tokens' amounts
+    /// @param nftIds NFTs' ids
+    /// @param tokenTransferTypes command sequence of transfer types
+    /// @param receiver address
     function transferTokensFromContract(
         address[] calldata tokens,
         uint256[] calldata amounts,
@@ -43,5 +51,13 @@ abstract contract JamTransfer {
                 revert("INVALID_TRANSFER_TYPE");
             }
         }
+    }
+
+    /// @dev Transfer native tokens to receiver from this contract
+    /// @param receiver address
+    /// @param amount amount of native tokens
+    function transferNativeFromContract(address receiver, uint256 amount) public {
+        (bool sent, ) = payable(receiver).call{value: amount}("");
+        require(sent, "FAILED_TO_SEND_ETH");
     }
 }

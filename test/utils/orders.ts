@@ -272,5 +272,22 @@ export function getOrder(orderType: string, takerAddress: string, sellCommands: 
             sellTokenTransfers: "0x" + sellCommands.join("")
         }
     }
+    if (orderType === "NFT-to-NFT+ETH"){
+        return {
+            sellTokens: [NFTS_ERC721.ens.address],
+            buyTokens: [TOKENS.ETH, NFTS_ERC721.bayc.address],
+            sellAmounts: [1],
+            buyAmounts: [AMOUNTS.WETH_1, 1],
+            sellNFTIds: [NFTS_ERC721.ens.id],
+            buyNFTIds: [NFTS_ERC721.bayc.id],
+            taker: takerAddress,
+            receiver: takerAddress,
+            nonce: nonce,
+            expiry,
+            hooksHash: "",
+            buyTokenTransfers: "0x" + buyCommands.join(""),
+            sellTokenTransfers: "0x" + sellCommands.join("")
+        }
+    }
     throw new Error("Order type not supported")
 }

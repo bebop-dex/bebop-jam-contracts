@@ -7,8 +7,10 @@ import "../libraries/JamHooks.sol";
 import "../libraries/Signature.sol";
 import "@openzeppelin/contracts/interfaces/IERC1271.sol";
 
+/// @title JamSigning
+/// @notice Functions which handles the signing and validation of Jam orders
 abstract contract JamSigning {
-    mapping(uint256 => bool) private invalidNonces;
+    mapping(uint256 => uint256) private invalidNonces;
 
     bytes32 private constant DOMAIN_NAME = keccak256("JamSettlement");
     bytes32 private constant DOMAIN_VERSION = keccak256("1");
@@ -34,6 +36,8 @@ abstract contract JamSigning {
         );
     }
 
+    /// @notice The domain separator used in the order validation signature
+    /// @return The domain separator used in encoding of order signature
     function DOMAIN_SEPARATOR() public view returns (bytes32) {
         return block.chainid == _CACHED_CHAIN_ID
             ? _CACHED_DOMAIN_SEPARATOR
@@ -42,11 +46,18 @@ abstract contract JamSigning {
             );
     }
 
+    /// @notice Hash beforeSettle and afterSettle interactions
+    /// @param hooks pre and post interactions to hash
+    /// @return The hash of the interactions
     function hashHooks(JamHooks.Def calldata hooks) public pure returns (bytes32) {
-        // TODO: optimise with encodePacked? 
+        // TODO: optimise with encodePacked?
         return keccak256(abi.encode(hooks));
     }
 
+    /// @notice Hash the order info and hooks
+    /// @param order The order to hash
+    /// @param hooksHash The hash of the hooks
+    /// @return The hash of the order
     function hashOrder(JamOrder.Data calldata order, bytes32 hooksHash) public view returns (bytes32) {
         return
         keccak256(
@@ -71,6 +82,10 @@ abstract contract JamSigning {
         );
     }
 
+    /// @notice Validate the order signature
+    /// @param validationAddress The address to validate the signature against
+    /// @param hash The hash of the order
+    /// @param signature The signature to validate
     function validateSignature(address validationAddress, bytes32 hash, Signature.TypedSignature calldata signature) public view {
         if (signature.signatureType == Signature.Type.EIP712) {
             (bytes32 r, bytes32 s, uint8 v) = Signature.getRsv(signature.signatureBytes);
@@ -102,8 +117,22 @@ abstract contract JamSigning {
         }
     }
 
+    /// @notice Check if nonce is valid and invalidate it
+    /// @param nonce The nonce to invalidate
+    function invalidateOrderNonce(uint256 nonce) private {
+        require(nonce != 0, "ZERO_NONCE");
+        uint256 invalidatorSlot = nonce >> 8;
+        uint256 invalidatorBit = 1 << (nonce & 0xff);
+        uint256 invalidator = invalidNonces[invalidatorSlot];
+        require(invalidator & invalidatorBit != invalidatorBit, "INVALID_NONCE");
+        invalidNonces[invalidatorSlot] = invalidator | invalidatorBit;
+    }
+
+    /// @notice validate all information about the order
+    /// @param order The order to validate
+    /// @param hooks User's hooks to validate
+    /// @param signature The signature to check against
     function validateOrder(JamOrder.Data calldata order, JamHooks.Def calldata hooks, Signature.TypedSignature calldata signature) public {
-        validateNonce(order.nonce);
         // Allow settle from user without sig
         if (order.taker != msg.sender) {
             bytes32 hooksHash = hashHooks(hooks);
@@ -114,15 +143,7 @@ abstract contract JamSigning {
         require(order.buyTokens.length == order.buyTokenTransfers.length, "INVALID_BUY_TRANSFERS_LENGTH");
         require(order.sellTokens.length == order.sellAmounts.length, "INVALID_SELL_TOKENS_LENGTH");
         require(order.sellTokens.length == order.sellTokenTransfers.length, "INVALID_SELL_TRANSFERS_LENGTH");
+        invalidateOrderNonce(order.nonce);
         require(block.timestamp < order.expiry, "ORDER_EXPIRED");
-        invalidateNonce(order.nonce);
-    }
-
-    function invalidateNonce(uint256 nonce) private {
-        invalidNonces[nonce] = true;
-    }
-
-    function validateNonce(uint256 nonce) private view {
-        require(!invalidNonces[nonce], "INVALID_NONCE");
     }
 }

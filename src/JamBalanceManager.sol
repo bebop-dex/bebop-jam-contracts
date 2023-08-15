@@ -5,6 +5,7 @@ import "./interfaces/IJamBalanceManager.sol";
 import "./interfaces/IPermit2.sol";
 import "./libraries/JamOrder.sol";
 import "./libraries/common/SafeCast160.sol";
+import "./base/JamTransfer.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
@@ -21,7 +22,7 @@ contract JamBalanceManager is IJamBalanceManager {
     IPermit2 private immutable PERMIT2;
 
     constructor(address _operator, address _permit2) {
-        // Operator can be defined at creation time with `msg.sender` 
+        // Operator can be defined at creation time with `msg.sender`
         // Pass in the settlement - and that can be the only caller.
         operator = _operator;
         PERMIT2 = IPermit2(_permit2);
@@ -61,7 +62,7 @@ contract JamBalanceManager is IJamBalanceManager {
             } else if (tokenTransferTypes[i] == Commands.NATIVE_TRANSFER) {
                 require(tokens[i] == JamOrder.NATIVE_TOKEN, "INVALID_NATIVE_TOKEN_ADDRESS");
                 if (receiver != operator){
-                    payable(receiver).call{value: amounts[i]}("");
+                    JamTransfer(operator).transferNativeFromContract(receiver, amounts[i]);
                 }
             } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
                 require(amounts[i] == 1, "INVALID_ERC721_AMOUNT");
