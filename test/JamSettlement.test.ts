@@ -4,13 +4,8 @@ import BebopSettlementABI from './bebop/BebopSettlement.json'
 import {BigNumber, utils} from "ethers";
 import {JamHooks, JamInteraction, JamOrder, JamSettlement} from "../typechain-types/artifacts/src/JamSettlement";
 import {BebopSettlement} from "../typechain-types";
-import {PERMIT2_ADDRESS, TOKENS} from "./config";
-import {
-  approveTokens,
-  getBalancesBefore,
-  signJamOrder,
-  verifyBalancesAfter
-} from "./utils/utils";
+import {BINANCE_ADDRESS, PERMIT2_ADDRESS, TOKENS} from "./config";
+import {approveTokens, getBalancesBefore, signJamOrder, verifyBalancesAfter} from "./utils/utils";
 import {Commands, getOrder} from "./utils/orders";
 import {getBebopSolverCalls} from "./bebop/bebop-utils";
 import {HooksGenerator} from "./hooks/hooksGenerator";
@@ -76,7 +71,7 @@ describe("JamSettlement", function () {
     }
 
     await verifyBalancesAfter(jamOrder.buyTokens, jamOrder.receiver, sellTokensTransfers, buyTokensTransfers, jamOrder.buyNFTIds, solverContract.address,
-        usingSolverContract, jamOrder.buyAmounts, solverExcess, userBalancesBefore, solverBalancesBefore, directSettle)
+        usingSolverContract, jamOrder.buyAmounts, solverExcess, userBalancesBefore, solverBalancesBefore, directSettle, settlement.address)
   }
 
   before(async () => {
@@ -278,6 +273,29 @@ describe("JamSettlement", function () {
     let jamOrder: JamOrder.DataStruct = getOrder("NFT-to-NFT+ETH", fixture.user.address, sellTokenTransfers, buyTokenTransfers)!
     let solverCalls: JamInteraction.DataStruct[] = []
     await settle(jamOrder, "0x", emptyHooks, solverCalls, sellTokenTransfers,
+        buyTokenTransfers, false, false, true)
+  });
+
+  it('WETH+NFT-to-NFT', async function () {
+    let sellTokenTransfers: Commands[] = [Commands.NFT_ERC721_TRANSFER, Commands.SIMPLE_TRANSFER]
+    let buyTokenTransfers: Commands[] = [Commands.NFT_ERC721_TRANSFER]
+    let jamOrder: JamOrder.DataStruct = getOrder("WETH+NFT-to-NFT", fixture.user.address, sellTokenTransfers, buyTokenTransfers)!
+    let solverCalls: JamInteraction.DataStruct[] = []
+    await settle(jamOrder, "0x", emptyHooks, solverCalls, sellTokenTransfers,
+        buyTokenTransfers, false, false, true)
+  });
+
+  it('Post hooks', async function () {
+    let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let buyTokenTransfers: Commands[] = [Commands.NATIVE_TRANSFER]
+    let jamOrder: JamOrder.DataStruct = getOrder("BuyNative", fixture.user.address, sellTokenTransfers, buyTokenTransfers)!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.settlement.address, fixture.bebopMaker)
+    jamOrder.receiver = fixture.settlement.address
+    const hooks: JamHooks.DefStruct = {
+      beforeSettle: [],
+      afterSettle: [{ result: true, to: BINANCE_ADDRESS, data: "0x", value: jamOrder.buyAmounts[0] }] // it could be bridge tx
+    }
+    await settle(jamOrder, "0x", hooks, solverCalls, sellTokenTransfers,
         buyTokenTransfers, false, false, true)
   });
 

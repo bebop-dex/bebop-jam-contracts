@@ -100,7 +100,8 @@ export async function verifyBalancesAfter(
     solverExcess: BigNumberish,
     userBalancesBefore: {[id:string]: BigNumberish},
     solverBalancesBefore: {[id:string]: BigNumberish},
-    internalSettle: boolean
+    internalSettle: boolean,
+    settlementAddr: string
 ){
     let takerGetExcess = !usingSolverContract && !internalSettle
     let nftId = 0
@@ -126,6 +127,10 @@ export async function verifyBalancesAfter(
                 expect(solverBalanceAfter.sub(solverBalancesBefore[token])).to.be.equal(solverExcess)
             }
         }
-        expect(userBalanceAfter.sub(userBalancesBefore[token])).to.be.equal(BigNumber.from(amounts[i]).add(takerGetExcess ? solverExcess : 0))
+        if (receiver === settlementAddr) {
+            expect(userBalanceAfter.sub(userBalancesBefore[token])).to.be.equal(BigNumber.from(0))
+        } else {
+            expect(userBalanceAfter.sub(userBalancesBefore[token])).to.be.equal(BigNumber.from(amounts[i]).add(takerGetExcess ? solverExcess : 0))
+        }
     }
 }
