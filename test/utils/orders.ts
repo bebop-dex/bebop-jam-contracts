@@ -13,6 +13,7 @@ export enum Commands {
 
 const AMOUNTS = {
     "WETH_1": ethers.utils.parseUnits("1", 18).toString(),
+    "WETH_2": ethers.utils.parseUnits("3", 18).toString(),
     "DAI_1": ethers.utils.parseUnits("1000", 18).toString(),
     "USDC_1": ethers.utils.parseUnits("123", 6).toString(),
     "WBTC_1": ethers.utils.parseUnits("0.1", 8).toString(),
@@ -98,6 +99,23 @@ export function getOrder(orderType: string, takerAddress: string, sellCommands: 
             buyTokens: [TOKENS.ETH],
             sellAmounts: [AMOUNTS.USDC_1],
             buyAmounts: [AMOUNTS.WETH_1],
+            sellNFTIds: [],
+            buyNFTIds: [],
+            taker: takerAddress,
+            receiver: takerAddress,
+            nonce: nonce,
+            expiry,
+            hooksHash: "",
+            buyTokenTransfers: "0x" + buyCommands.join(""),
+            sellTokenTransfers: "0x" + sellCommands.join("")
+        }
+    }
+    if (orderType === "BuyNativeAndWrapped"){
+        return {
+            sellTokens: [TOKENS.USDC],
+            buyTokens: [TOKENS.ETH, TOKENS.WETH],
+            sellAmounts: [AMOUNTS.USDC_1],
+            buyAmounts: [AMOUNTS.WETH_1, AMOUNTS.WETH_2],
             sellNFTIds: [],
             buyNFTIds: [],
             taker: takerAddress,

@@ -124,4 +124,10 @@ export class HooksGenerator {
         return await wrappedTokenContract.populateTransaction["withdraw(uint256)"](amount)
     }
 
+    async getHook_transferERC20(tokenAddress: string, amount: BigNumberish, to: string){
+        await this.prepareData()
+        let tokenContract = new Contract(tokenAddress, ERC20, this.user)
+        return await tokenContract.populateTransaction["transfer(address,uint256)"](to, amount)
+    }
+
 }

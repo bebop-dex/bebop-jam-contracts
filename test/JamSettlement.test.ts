@@ -287,13 +287,32 @@ describe("JamSettlement", function () {
 
   it('Post hooks', async function () {
     let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let buyTokenTransfers: Commands[] = [Commands.NATIVE_TRANSFER, Commands.SIMPLE_TRANSFER]
+    let jamOrder: JamOrder.DataStruct = getOrder("BuyNativeAndWrapped", fixture.user.address, sellTokenTransfers, buyTokenTransfers)!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
+    jamOrder.receiver = fixture.settlement.address
+
+    let bridgeAddress = BINANCE_ADDRESS // using transfers instead of real bridge tx
+    let transferHook = await hooksGenerator.getHook_transferERC20(jamOrder.buyTokens[1], jamOrder.buyAmounts[1], bridgeAddress)
+    const hooks: JamHooks.DefStruct = {
+      beforeSettle: [],
+      afterSettle: [
+          { result: true, to: bridgeAddress, data: "0x", value: jamOrder.buyAmounts[0] },
+          { result: true, to: TOKENS.WETH, data: transferHook.data!, value: "0" }
+      ]
+    }
+    await settle(jamOrder, fixture.solverContract.address, hooks, solverCalls, sellTokenTransfers, buyTokenTransfers)
+  });
+
+  it('Post hooks with settleInternal', async function () {
+    let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
     let buyTokenTransfers: Commands[] = [Commands.NATIVE_TRANSFER]
     let jamOrder: JamOrder.DataStruct = getOrder("BuyNative", fixture.user.address, sellTokenTransfers, buyTokenTransfers)!
     let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.settlement.address, fixture.bebopMaker)
     jamOrder.receiver = fixture.settlement.address
     const hooks: JamHooks.DefStruct = {
       beforeSettle: [],
-      afterSettle: [{ result: true, to: BINANCE_ADDRESS, data: "0x", value: jamOrder.buyAmounts[0] }] // it could be bridge tx
+      afterSettle: [{ result: true, to: BINANCE_ADDRESS, data: "0x", value: jamOrder.buyAmounts[0] }]
     }
     await settle(jamOrder, "0x", hooks, solverCalls, sellTokenTransfers,
         buyTokenTransfers, false, false, true)

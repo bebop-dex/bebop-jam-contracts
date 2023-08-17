@@ -60,4 +60,55 @@ abstract contract JamTransfer {
         (bool sent, ) = payable(receiver).call{value: amount}("");
         require(sent, "FAILED_TO_SEND_ETH");
     }
+
+
+    function verifyBalances(
+        address[] calldata tokens,
+        uint256[] calldata amounts,
+        uint256[] memory initialAmounts,
+        uint256[] calldata nftIds,
+        bytes calldata tokenTransferTypes,
+        address receiver
+    ) internal {
+        uint nftInd;
+        for (uint i; i < tokens.length; ++i) {
+            if (tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER) {
+                uint tokenBalance = IERC20(tokens[i]).balanceOf(receiver);
+                require(tokenBalance - initialAmounts[i] >= amounts[i], "INVALID_OUTPUT_TOKEN_BALANCE");
+            } else if (tokenTransferTypes[i] == Commands.NATIVE_TRANSFER){
+                uint tokenBalance = receiver.balance;
+                require(tokenBalance - initialAmounts[i] >= amounts[i], "INVALID_OUTPUT_NATIVE_BALANCE");
+            } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
+                require(IERC721(tokens[i]).ownerOf(nftIds[nftInd++]) == receiver, "INVALID_ERC721_RECEIVER");
+            } else if (tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
+                uint tokenBalance = IERC1155(tokens[i]).balanceOf(receiver, nftIds[nftInd++]);
+                require(tokenBalance - initialAmounts[i] >= amounts[i], "INVALID_OUTPUT_ERC1155_BALANCE");
+            } else {
+                revert("INVALID_TRANSFER_TYPE");
+            }
+        }
+    }
+
+    function getInitialBalances(
+        address[] calldata tokens,
+        uint256[] calldata nftIds,
+        bytes calldata tokenTransferTypes,
+        address receiver
+    ) internal returns (uint256[] memory){
+        uint256[] memory initialBalances = new uint256[](tokens.length);
+        uint nftInd;
+        for (uint i; i < tokens.length; ++i) {
+            if (tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER) {
+                initialBalances[i] = IERC20(tokens[i]).balanceOf(receiver);
+            } else if (tokenTransferTypes[i] == Commands.NATIVE_TRANSFER){
+                require(tokens[i] == JamOrder.NATIVE_TOKEN, "INVALID_OUTPUT_TOKEN");
+                initialBalances[i] = receiver.balance;
+            } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
+                ++nftInd;
+            } else if (tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
+                initialBalances[i] = IERC1155(tokens[i]).balanceOf(receiver, nftIds[nftInd++]);
+            }
+        }
+        return initialBalances;
+    }
 }
