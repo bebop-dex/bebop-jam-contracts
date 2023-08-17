@@ -62,6 +62,13 @@ abstract contract JamTransfer {
     }
 
 
+    /// @dev Verify balances of tokens after main interactions
+    /// @param tokens Buy tokens' addresses
+    /// @param amounts Buy tokens' amounts
+    /// @param initialAmounts initial buy tokens' amounts
+    /// @param nftIds NFTs' ids
+    /// @param tokenTransferTypes command sequence of transfer types
+    /// @param receiver address
     function verifyBalances(
         address[] calldata tokens,
         uint256[] calldata amounts,
@@ -89,6 +96,11 @@ abstract contract JamTransfer {
         }
     }
 
+    /// @dev Get initial balances of tokens before main interactions
+    /// @param tokens Buy tokens' addresses
+    /// @param nftIds NFTs' ids
+    /// @param tokenTransferTypes command sequence of transfer types
+    /// @param receiver address
     function getInitialBalances(
         address[] calldata tokens,
         uint256[] calldata nftIds,
