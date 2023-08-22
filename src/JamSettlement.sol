@@ -77,15 +77,17 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
     function settleInternal(
         JamOrder.Data calldata order,
         Signature.TypedSignature calldata signature,
-        JamHooks.Def calldata hooks
+        JamHooks.Def calldata hooks,
+        uint256[] calldata increasedBuyAmounts
     ) external payable nonReentrant {
         validateOrder(order, hooks, signature);
+        uint256[] calldata buyAmounts = validateIncreasedAmounts(increasedBuyAmounts, order.buyAmounts);
         require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
         balanceManager.transferTokens(
             order.taker, msg.sender, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
         );
         balanceManager.transferTokens(
-            msg.sender, order.receiver, order.buyTokens, order.buyAmounts, order.buyNFTIds, order.buyTokenTransfers
+            msg.sender, order.receiver, order.buyTokens, buyAmounts, order.buyNFTIds, order.buyTokenTransfers
         );
         require(runInteractions(hooks.afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
         emit Settlement(order.nonce);

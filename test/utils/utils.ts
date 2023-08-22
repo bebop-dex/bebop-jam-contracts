@@ -14,10 +14,14 @@ const JAM_ORDER_TYPES = {
         { "name": "expiry", "type": "uint32" },
         { "name": "nonce", "type": "uint256" },
         { "name": "hooksHash", "type": "bytes32" },
-        { "name": "buyTokens", "type": "address[]" },
         { "name": "sellTokens", "type": "address[]" },
-        { "name": "buyAmounts", "type": "uint256[]" },
+        { "name": "buyTokens", "type": "address[]" },
         { "name": "sellAmounts", "type": "uint256[]" },
+        { "name": "buyAmounts", "type": "uint256[]" },
+        { "name": "sellNFTIds", "type": "uint256[]" },
+        { "name": "buyNFTIds", "type": "uint256[]" },
+        { "name": "sellTokenTransfers", "type": "bytes" },
+        { "name": "buyTokenTransfers", "type": "bytes" },
     ]
 }
 

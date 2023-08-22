@@ -14,3 +14,4 @@ typechain-types/
 
 .DS_Store
 .idea
+.env

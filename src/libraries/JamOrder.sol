@@ -23,13 +23,13 @@ library JamOrder {
         uint32 expiry;
         uint256 nonce;
         bytes32 hooksHash; // keccak256(pre interactions + post interactions)
-        address[] buyTokens;
         address[] sellTokens;
+        address[] buyTokens;
         uint256[] sellAmounts;
         uint256[] buyAmounts;
         uint256[] sellNFTIds;
         uint256[] buyNFTIds;
-        bytes buyTokenTransfers; // Commands sequence of buyToken transfer types
         bytes sellTokenTransfers; // Commands sequence of sellToken transfer types
+        bytes buyTokenTransfers; // Commands sequence of buyToken transfer types
     }
 }

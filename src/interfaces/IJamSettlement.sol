@@ -31,9 +31,12 @@ interface IJamSettlement {
     /// @param order user signed order
     /// @param signature user signature
     /// @param hooks pre and post interactions
+    /// @param increasedBuyAmounts if maker wants to increase user's order.buyAmounts,
+    /// then maker can specify new buyAmounts here, otherwise it should be empty array
     function settleInternal(
         JamOrder.Data calldata order,
         Signature.TypedSignature calldata signature,
-        JamHooks.Def calldata hooks
+        JamHooks.Def calldata hooks,
+        uint256[] calldata increasedBuyAmounts
     ) external payable;
 }

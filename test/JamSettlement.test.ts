@@ -1,7 +1,7 @@
 import {waffle} from "hardhat";
 import {getFixture} from './utils/fixture'
 import BebopSettlementABI from './bebop/BebopSettlement.json'
-import {BigNumber, utils} from "ethers";
+import {BigNumber, BigNumberish, utils} from "ethers";
 import {JamHooks, JamInteraction, JamOrder, JamSettlement} from "../typechain-types/artifacts/src/JamSettlement";
 import {BebopSettlement} from "../typechain-types";
 import {BINANCE_ADDRESS, PERMIT2_ADDRESS, TOKENS} from "./config";
@@ -30,7 +30,8 @@ describe("JamSettlement", function () {
       buyTokensTransfers: Commands[],
       usingSolverContract: boolean = true,
       skipTakerApprovals: boolean = false,
-      directSettle: boolean = false
+      directSettle: boolean = false,
+      directSettleIncreasedAmounts: BigNumberish[] = []
   ) {
     const { user, settlement, solver, solverContract, directMaker } = fixture;
 
@@ -63,15 +64,16 @@ describe("JamSettlement", function () {
     let [userBalancesBefore, solverBalancesBefore] = await getBalancesBefore(
         jamOrder.buyTokens, jamOrder.receiver, buyTokensTransfers, jamOrder.buyNFTIds, solverContract.address)
 
+    let increasedAmounts = directSettleIncreasedAmounts.length > 0 ? directSettleIncreasedAmounts : jamOrder.buyAmounts
     if (directSettle) {
-      nativeTokenAmount = await approveTokens(jamOrder.buyTokens, jamOrder.buyAmounts, buyTokensTransfers, directMaker, fixture.balanceManager.address)
-      await settlement.connect(directMaker).settleInternal(jamOrder, signature, hooks, {value: nativeTokenAmount.toString()});
+      nativeTokenAmount = await approveTokens(jamOrder.buyTokens, increasedAmounts, buyTokensTransfers, directMaker, fixture.balanceManager.address)
+      await settlement.connect(directMaker).settleInternal(jamOrder, signature, hooks, increasedAmounts, {value: nativeTokenAmount.toString()});
     } else {
       await settlement.connect(executor).settle(jamOrder, signature, interactions, hooks, balanceRecipient, {value: nativeTokenAmount.toString()});
     }
 
     await verifyBalancesAfter(jamOrder.buyTokens, jamOrder.receiver, sellTokensTransfers, buyTokensTransfers, jamOrder.buyNFTIds, solverContract.address,
-        usingSolverContract, jamOrder.buyAmounts, solverExcess, userBalancesBefore, solverBalancesBefore, directSettle, settlement.address)
+        usingSolverContract, increasedAmounts, solverExcess, userBalancesBefore, solverBalancesBefore, directSettle, settlement.address)
   }
 
   before(async () => {
@@ -213,6 +215,17 @@ describe("JamSettlement", function () {
     let solverCalls: JamInteraction.DataStruct[] = []
     await settle(jamOrder, "0x", emptyHooks, solverCalls, sellTokenTransfers,
         buyTokenTransfers, false, false, true)
+  });
+
+  it('settleInternal with increased buyAmounts', async function () {
+    let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, sellTokenTransfers, buyTokenTransfers)!
+    let solverCalls: JamInteraction.DataStruct[] = []
+    let increasedBuyAmounts: BigNumberish[] = [(Number(jamOrder.buyAmounts[0]) + 1000).toString()]
+
+    await settle(jamOrder, "0x", emptyHooks, solverCalls, sellTokenTransfers,
+        buyTokenTransfers, false, false, true, increasedBuyAmounts)
   });
 
   it('settleInternal Buy NFT ERC721', async function () {

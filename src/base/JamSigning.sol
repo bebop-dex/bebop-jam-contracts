@@ -23,7 +23,7 @@ abstract contract JamSigning {
     ));
 
     bytes32 public constant JAM_ORDER_TYPE_HASH = keccak256(abi.encodePacked(
-        "JamOrder(address taker,address receiver,uint32 expiry,uint256 nonce,bytes32 hooksHash,address[] buyTokens,address[] sellTokens,uint256[] buyAmounts,uint256[] sellAmounts)"
+        "JamOrder(address taker,address receiver,uint32 expiry,uint256 nonce,bytes32 hooksHash,address[] sellTokens,address[] buyTokens,uint256[] sellAmounts,uint256[] buyAmounts,uint256[] sellNFTIds,uint256[] buyNFTIds,bytes sellTokenTransfers,bytes buyTokenTransfers)"
     ));
 
     bytes32 private immutable _CACHED_DOMAIN_SEPARATOR;
@@ -72,10 +72,14 @@ abstract contract JamSigning {
                         order.expiry,
                         order.nonce,
                         hooksHash,
-                        keccak256(abi.encodePacked(order.buyTokens)),
                         keccak256(abi.encodePacked(order.sellTokens)),
+                        keccak256(abi.encodePacked(order.buyTokens)),
+                        keccak256(abi.encodePacked(order.sellAmounts)),
                         keccak256(abi.encodePacked(order.buyAmounts)),
-                        keccak256(abi.encodePacked(order.sellAmounts))
+                        keccak256(abi.encodePacked(order.sellNFTIds)),
+                        keccak256(abi.encodePacked(order.buyNFTIds)),
+                        keccak256(order.sellTokenTransfers),
+                        keccak256(order.buyTokenTransfers)
                     )
                 )
             )
@@ -145,5 +149,22 @@ abstract contract JamSigning {
         require(order.sellTokens.length == order.sellTokenTransfers.length, "INVALID_SELL_TRANSFERS_LENGTH");
         invalidateOrderNonce(order.nonce);
         require(block.timestamp < order.expiry, "ORDER_EXPIRED");
+    }
+
+    /// @notice validate if increased amounts are more than initial amounts that user signed
+    /// @param increasedAmounts The increased amounts to validate (if empty, return initial amounts)
+    /// @param initialAmounts The initial amounts to validate against
+    /// @return The increased amounts if exist, otherwise the initial amounts
+    function validateIncreasedAmounts(
+        uint256[] calldata increasedAmounts, uint256[] calldata initialAmounts
+    ) internal returns (uint256[] calldata){
+        if (increasedAmounts.length == 0) {
+            return initialAmounts;
+        }
+        require(increasedAmounts.length == initialAmounts.length, "INVALID_INCREASED_AMOUNTS_LENGTH");
+        for (uint256 i; i < increasedAmounts.length; ++i) {
+            require(increasedAmounts[i] >= initialAmounts[i], "INVALID_INCREASED_AMOUNTS");
+        }
+        return increasedAmounts;
     }
 }

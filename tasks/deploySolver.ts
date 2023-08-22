@@ -6,9 +6,11 @@ export default async function deploySolver(
 ): Promise<void> {
   const ethers = hre.ethers;
 
+  console.log("Deploying JamSolver...")
   const JamSolver = await ethers.getContractFactory("JamSolver");
   const solverContract = await JamSolver.deploy(params.settlement);
   await solverContract.deployed();
+  console.log("JamSolver deployed to:", solverContract.address)
 
   const solver = (await ethers.getSigners())[0];
 
