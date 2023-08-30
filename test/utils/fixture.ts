@@ -81,7 +81,7 @@ export async function getFixture () {
   const [deployer, solver, user, bebopMaker, directMaker, ...users] = await ethers.getSigners();
 
   const JamSettlement = await ethers.getContractFactory("JamSettlement");
-  const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS);
+  const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS, TOKENS.DAI);
   await settlement.deployed();
 
   const JamSolver = await ethers.getContractFactory("JamSolver");

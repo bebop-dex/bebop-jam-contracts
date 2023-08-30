@@ -15,6 +15,13 @@ library Signature {
         bytes signatureBytes;
     }
 
+    struct TakerPermitsInfo {
+        bytes[] permitSignatures;
+        bytes signatureBytesPermit2;
+        uint48[] noncesPermit2;
+        uint48 deadline;
+    }
+
     function getRsv(bytes memory sig) internal pure returns (bytes32, bytes32, uint8){
         require(sig.length == 65, "Invalid signature length");
         bytes32 r;

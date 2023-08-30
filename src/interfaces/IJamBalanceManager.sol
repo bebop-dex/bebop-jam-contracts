@@ -1,23 +1,42 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
 
+import "../libraries/Signature.sol";
+
 /// @title IJamBalanceManager
 /// @notice User approvals are made here. This handles the complexity of multiple allowance types. 
 interface IJamBalanceManager {
-    /// @dev Transfer from this contract to another
-    ///
-    /// @param from address to transfer form
-    /// @param receiver address
-    /// @param tokens tokens' addresses
-    /// @param amounts tokens' amounts
-    /// @param nftIds NFTs' ids
-    /// @param transferTypes command sequence of transfer types
+
+    /// @dev All information needed to transfer tokens
+    struct TransferData {
+        address from;
+        address receiver;
+        address[] tokens;
+        uint256[] amounts;
+        uint256[] nftIds;
+        bytes tokenTransferTypes;
+    }
+
+    /// @dev indices for transferTokensWithPermits function
+    struct Indices {
+        uint64 batchToApproveInd; // current `batchToApprove` index
+        uint64 permitSignaturesInd; // current `takerPermitsInfo.permitSignatures` index
+        uint64 nftsInd; // current `data.nftIds` index
+        uint64 batchLen; // current length of `batchTransferDetails`
+    }
+
+    /// @notice Transfer tokens from taker to solverContract/settlementContract/makerAddress.
+    /// Or transfer tokens directly from maker to taker for settleInternal case
+    /// @param transferData data for transfer
     function transferTokens(
-        address from,
-        address receiver,
-        address[] calldata tokens,
-        uint256[] calldata amounts,
-        uint256[] calldata nftIds,
-        bytes calldata transferTypes
+        TransferData calldata transferData
+    ) external;
+
+    /// @notice Transfer tokens from taker to solverContract/settlementContract
+    /// @param transferData data for transfer
+    /// @param takerPermitsInfo taker permits info
+    function transferTokensWithPermits(
+        TransferData calldata transferData,
+        Signature.TakerPermitsInfo calldata takerPermitsInfo
     ) external;
 }

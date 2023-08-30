@@ -51,7 +51,7 @@ export async function approveTokens(
         let curTokenContract = await ethers.getContractAt("ERC20", tokens[i])
         if (tokenTransfers[i] === Commands.SIMPLE_TRANSFER) {
             await curTokenContract.connect(user).approve(spender, amounts[i]);
-        } else if (tokenTransfers[i] === Commands.PERMIT2_TRANSFER) {
+        } else if (tokenTransfers[i] === Commands.PERMIT2_TRANSFER || tokenTransfers[i] === Commands.CALL_PERMIT2_THEN_TRANSFER) {
             await curTokenContract.connect(user).approve(PERMIT2_ADDRESS, amounts[i]);
         } else if (tokenTransfers[i] === Commands.NATIVE_TRANSFER) {
             nativeTokenAmount = nativeTokenAmount.add(BigNumber.from(amounts[i]))

@@ -23,8 +23,8 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
 
     IJamBalanceManager public immutable balanceManager;
 
-    constructor(address _permit2) {
-        balanceManager = new JamBalanceManager(address(this), _permit2);
+    constructor(address _permit2, address _daiAddress) {
+        balanceManager = new JamBalanceManager(address(this), _permit2, _daiAddress);
     }
 
     receive() external payable {}
@@ -52,8 +52,72 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
         validateOrder(order, hooks, signature);
         require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
         balanceManager.transferTokens(
-            order.taker, balanceRecipient, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
+            IJamBalanceManager.TransferData(
+                order.taker, balanceRecipient, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
+            )
         );
+        _settle(order, interactions, hooks);
+    }
+
+    /// @inheritdoc IJamSettlement
+    function settleWithTakerPermits(
+        JamOrder.Data calldata order,
+        Signature.TypedSignature calldata signature,
+        Signature.TakerPermitsInfo calldata takerPermitsInfo,
+        JamInteraction.Data[] calldata interactions,
+        JamHooks.Def calldata hooks,
+        address balanceRecipient
+    ) external payable nonReentrant {
+        validateOrder(order, hooks, signature);
+        require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
+        balanceManager.transferTokensWithPermits(
+            IJamBalanceManager.TransferData(
+                order.taker, balanceRecipient, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
+            ), takerPermitsInfo
+        );
+        _settle(order, interactions, hooks);
+    }
+
+    /// @inheritdoc IJamSettlement
+    function settleInternal(
+        JamOrder.Data calldata order,
+        Signature.TypedSignature calldata signature,
+        JamHooks.Def calldata hooks,
+        uint256[] calldata increasedBuyAmounts
+    ) external payable nonReentrant {
+        validateOrder(order, hooks, signature);
+        require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
+        balanceManager.transferTokens(
+            IJamBalanceManager.TransferData(
+                order.taker, msg.sender, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
+            )
+        );
+        _settleInternal(order, hooks, increasedBuyAmounts);
+    }
+
+    /// @inheritdoc IJamSettlement
+    function settleInternalWithTakerPermits(
+        JamOrder.Data calldata order,
+        Signature.TypedSignature calldata signature,
+        Signature.TakerPermitsInfo calldata takerPermitsInfo,
+        JamHooks.Def calldata hooks,
+        uint256[] calldata increasedBuyAmounts
+    ) external payable nonReentrant {
+        validateOrder(order, hooks, signature);
+        require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
+        balanceManager.transferTokensWithPermits(
+            IJamBalanceManager.TransferData(
+                order.taker, msg.sender, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
+            ), takerPermitsInfo
+        );
+        _settleInternal(order, hooks, increasedBuyAmounts);
+    }
+
+    function _settle(
+        JamOrder.Data calldata order,
+        JamInteraction.Data[] calldata interactions,
+        JamHooks.Def calldata hooks
+    ) private {
         if (order.receiver == address(this)){
             uint256[] memory initialReceiverBalances = getInitialBalances(
                 order.buyTokens,order.buyNFTIds, order.buyTokenTransfers, order.receiver
@@ -73,21 +137,16 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
         emit Settlement(order.nonce);
     }
 
-    /// @inheritdoc IJamSettlement
-    function settleInternal(
+    function _settleInternal(
         JamOrder.Data calldata order,
-        Signature.TypedSignature calldata signature,
         JamHooks.Def calldata hooks,
         uint256[] calldata increasedBuyAmounts
-    ) external payable nonReentrant {
-        validateOrder(order, hooks, signature);
+    ) private {
         uint256[] calldata buyAmounts = validateIncreasedAmounts(increasedBuyAmounts, order.buyAmounts);
-        require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
         balanceManager.transferTokens(
-            order.taker, msg.sender, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
-        );
-        balanceManager.transferTokens(
-            msg.sender, order.receiver, order.buyTokens, buyAmounts, order.buyNFTIds, order.buyTokenTransfers
+            IJamBalanceManager.TransferData(
+                msg.sender, order.receiver, order.buyTokens, buyAmounts, order.buyNFTIds, order.buyTokenTransfers
+            )
         );
         require(runInteractions(hooks.afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
         emit Settlement(order.nonce);

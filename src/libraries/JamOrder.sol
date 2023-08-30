@@ -4,11 +4,13 @@ pragma solidity ^0.8.17;
 /// @title Commands
 /// @notice Commands are used to specify how tokens are transferred in Data.buyTokenTransfers and Data.sellTokenTransfers
 library Commands {
-    bytes1 internal constant SIMPLE_TRANSFER = 0x00;
-    bytes1 internal constant PERMIT2_TRANSFER = 0x01;
-    bytes1 internal constant NATIVE_TRANSFER = 0x02;
-    bytes1 internal constant NFT_ERC721_TRANSFER = 0x04;
-    bytes1 internal constant NFT_ERC1155_TRANSFER = 0x05;
+    bytes1 internal constant SIMPLE_TRANSFER = 0x00; // simple transfer with standard transferFrom
+    bytes1 internal constant PERMIT2_TRANSFER = 0x01; // transfer using permit2.transfer
+    bytes1 internal constant CALL_PERMIT_THEN_TRANSFER = 0x02; // call permit then simple transfer
+    bytes1 internal constant CALL_PERMIT2_THEN_TRANSFER = 0x03; // call permit2.permit then permit2.transfer
+    bytes1 internal constant NATIVE_TRANSFER = 0x04;
+    bytes1 internal constant NFT_ERC721_TRANSFER = 0x05;
+    bytes1 internal constant NFT_ERC1155_TRANSFER = 0x06;
 }
 
 /// @title JamOrder
@@ -20,7 +22,7 @@ library JamOrder {
     struct Data {
         address taker;
         address receiver;
-        uint32 expiry;
+        uint256 expiry;
         uint256 nonce;
         bytes32 hooksHash; // keccak256(pre interactions + post interactions)
         address[] sellTokens;

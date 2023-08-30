@@ -6,9 +6,11 @@ import {ethers} from "hardhat";
 export enum Commands {
     SIMPLE_TRANSFER = "00",
     PERMIT2_TRANSFER ="01",
-    NATIVE_TRANSFER = "02",
-    NFT_ERC721_TRANSFER = "04",
-    NFT_ERC1155_TRANSFER = "05"
+    CALL_PERMIT_THEN_TRANSFER = "02",
+    CALL_PERMIT2_THEN_TRANSFER = "03",
+    NATIVE_TRANSFER = "04",
+    NFT_ERC721_TRANSFER = "05",
+    NFT_ERC1155_TRANSFER = "06",
 }
 
 const AMOUNTS = {
@@ -20,6 +22,8 @@ const AMOUNTS = {
     "LINK_1": ethers.utils.parseUnits("2", 18).toString(),
     "MKR_1": ethers.utils.parseUnits("1", 18).toString(),
     "YFI_1": ethers.utils.parseUnits("1", 18).toString(),
+    "UNI_1": ethers.utils.parseUnits("12", 18).toString(),
+    "AAVE_1": ethers.utils.parseUnits("0.2", 18).toString(),
 }
 
 export function getOrder(orderType: string, takerAddress: string, sellCommands: Commands[], buyCommands: Commands[]): JamOrder.DataStruct {
@@ -47,6 +51,23 @@ export function getOrder(orderType: string, takerAddress: string, sellCommands: 
             sellTokens: [TOKENS.DAI],
             buyTokens: [TOKENS.USDC],
             sellAmounts: [AMOUNTS.DAI_1],
+            buyAmounts: [AMOUNTS.USDC_1],
+            sellNFTIds: [],
+            buyNFTIds: [],
+            taker: takerAddress,
+            receiver: takerAddress,
+            nonce: nonce,
+            expiry,
+            hooksHash: "",
+            buyTokenTransfers: "0x" + buyCommands.join(""),
+            sellTokenTransfers: "0x" + sellCommands.join("")
+        }
+    }
+    if (orderType === "ERC20-Permit"){
+        return {
+            sellTokens: [TOKENS.AAVE],
+            buyTokens: [TOKENS.USDC],
+            sellAmounts: [AMOUNTS.AAVE_1],
             buyAmounts: [AMOUNTS.USDC_1],
             sellNFTIds: [],
             buyNFTIds: [],
@@ -315,6 +336,23 @@ export function getOrder(orderType: string, takerAddress: string, sellCommands: 
             buyAmounts: [1],
             sellNFTIds: [NFTS_ERC721.bayc.id],
             buyNFTIds: [NFTS_ERC721.ens.id],
+            taker: takerAddress,
+            receiver: takerAddress,
+            nonce: nonce,
+            expiry,
+            hooksHash: "",
+            buyTokenTransfers: "0x" + buyCommands.join(""),
+            sellTokenTransfers: "0x" + sellCommands.join("")
+        }
+    }
+    if (orderType === "Permits-mix"){
+        return {
+            sellTokens: [TOKENS.UNI, TOKENS.WETH, TOKENS.LINK, TOKENS.WBTC],
+            buyTokens: [TOKENS.USDC],
+            sellAmounts: [AMOUNTS.UNI_1, AMOUNTS.WETH_1, AMOUNTS.LINK_1, AMOUNTS.WBTC_1],
+            buyAmounts: [AMOUNTS.USDC_1],
+            sellNFTIds: [],
+            buyNFTIds: [],
             taker: takerAddress,
             receiver: takerAddress,
             nonce: nonce,
