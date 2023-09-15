@@ -1,4 +1,4 @@
-import { HardhatRuntimeEnvironment } from "hardhat/types/runtime";
+import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 export default async function deploySolver(
   params: { settlement: string },

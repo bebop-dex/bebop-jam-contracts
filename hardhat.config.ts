@@ -8,7 +8,7 @@ import { HardhatUserConfig, task } from "hardhat/config";
 import deploy from "./tasks/deploy";
 import deploySolver from "./tasks/deploySolver";
 
-const POLYGON_PRIVATE_KEY = process.env.POLYGON_PRIVATE_KEY;
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
 function getRemappings() {
   return fs
@@ -65,7 +65,11 @@ const config: HardhatUserConfig = {
     },
     polygon: {
       url: 'https://polygon-mainnet.g.alchemy.com/v2/Q39gdiKfeBSD5lr30t-OJQzl5VIgbwVR',
-      accounts: POLYGON_PRIVATE_KEY ? [POLYGON_PRIVATE_KEY] : undefined
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+    },
+    ethereum: {
+      url: 'https://eth.llamarpc.com',
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined
     }
   }
 };

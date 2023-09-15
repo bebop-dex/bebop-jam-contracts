@@ -58,7 +58,7 @@ export async function getBebopSolverCalls(
             nativeTokenAmount = nativeTokenAmount.add(taker_amounts[i])
             commands += "01"
         } else {
-            let tokenContract = await ethers.getContractAt("ERC20", jamOrder.sellTokens[i])
+            let tokenContract = await ethers.getContractAt("IERC20", jamOrder.sellTokens[i])
             const bebopApprovalTxToken = await tokenContract.populateTransaction.approve(bebop.address, taker_amounts[i])
             solverCalls.push({ result: true, to: bebopApprovalTxToken.to!, data: bebopApprovalTxToken.data!, value: 0 })
             taker_tokens.push(jamOrder.sellTokens[i])
@@ -87,7 +87,7 @@ export async function getBebopSolverCalls(
     }
     const maker_sig = await maker._signTypedData(BEBOP_DOMAIN, PARTIAL_ORDER_TYPES, partialOrder)
     for (let i = 0; i < maker_tokens.length; i++){
-        let tokenContract = await ethers.getContractAt("ERC20", maker_tokens[i])
+        let tokenContract = await ethers.getContractAt("IERC20", maker_tokens[i])
         await tokenContract.connect(maker).approve(bebop.address, maker_tokens[i])
     }
 

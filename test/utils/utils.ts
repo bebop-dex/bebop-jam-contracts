@@ -48,7 +48,7 @@ export async function approveTokens(
 ): Promise<BigNumber> {
     let nativeTokenAmount = BigNumber.from(0)
     for (let i = 0; i < tokens.length; i++) {
-        let curTokenContract = await ethers.getContractAt("ERC20", tokens[i])
+        let curTokenContract = await ethers.getContractAt("IERC20", tokens[i])
         if (tokenTransfers[i] === Commands.SIMPLE_TRANSFER) {
             await curTokenContract.connect(user).approve(spender, amounts[i]);
         } else if (tokenTransfers[i] === Commands.PERMIT2_TRANSFER || tokenTransfers[i] === Commands.CALL_PERMIT2_THEN_TRANSFER) {
@@ -84,8 +84,8 @@ export async function getBalancesBefore(
             userBalancesBefore[token] = await (await ethers.getContractAt("IERC1155", token)).balanceOf(receiver, buyNFTsIds[nftId])
             solverBalancesBefore[token] = await (await ethers.getContractAt("IERC1155", token)).balanceOf(solverAddress, buyNFTsIds[nftId++])
         } else {
-            userBalancesBefore[token] = await (await ethers.getContractAt("ERC20", token)).balanceOf(receiver)
-            solverBalancesBefore[token] = await (await ethers.getContractAt("ERC20", token)).balanceOf(solverAddress)
+            userBalancesBefore[token] = await (await ethers.getContractAt("IERC20", token)).balanceOf(receiver)
+            solverBalancesBefore[token] = await (await ethers.getContractAt("IERC20", token)).balanceOf(solverAddress)
         }
     }
     return [userBalancesBefore, solverBalancesBefore]
@@ -124,8 +124,8 @@ export async function verifyBalancesAfter(
             userBalanceAfter = await (await ethers.getContractAt("IERC1155", token)).balanceOf(receiver, buyNFTsIds[nftId])
             solverBalanceAfter = await (await ethers.getContractAt("IERC1155", token)).balanceOf(solverAddress, buyNFTsIds[nftId++])
         } else {
-            userBalanceAfter = await (await ethers.getContractAt("ERC20", token)).balanceOf(receiver)
-            solverBalanceAfter = await (await ethers.getContractAt("ERC20", token)).balanceOf(solverAddress)
+            userBalanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(receiver)
+            solverBalanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(solverAddress)
             if (usingSolverContract &&
                 !(sellTokensTransfers.includes(Commands.NFT_ERC721_TRANSFER) || sellTokensTransfers.includes(Commands.NFT_ERC1155_TRANSFER))){
                 expect(solverBalanceAfter.sub(solverBalancesBefore[token])).to.be.equal(solverExcess)

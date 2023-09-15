@@ -21,7 +21,7 @@ async function getFunds(walletsWithFunds: SignerWithAddress[], solverAddr: strin
       to: TOKENS.WETH,
       value: amount
     })
-    let WETH_Contract = await ethers.getContractAt("ERC20", TOKENS.WETH)
+    let WETH_Contract = await ethers.getContractAt("IERC20", TOKENS.WETH)
     expect(await WETH_Contract.balanceOf(wallet.address)).to.equal(amount);
 
     // Get other tokens
@@ -32,7 +32,7 @@ async function getFunds(walletsWithFunds: SignerWithAddress[], solverAddr: strin
         params: [BINANCE_ADDRESS],
       });
       const binance = await ethers.provider.getSigner(BINANCE_ADDRESS);
-      let tokenContract = await ethers.getContractAt("ERC20", token)
+      let tokenContract = await ethers.getContractAt("IERC20", token)
       let tokenBalance = (await tokenContract.balanceOf(BINANCE_ADDRESS)).div(5)
       expect(tokenBalance).to.be.gt(0);
       await tokenContract.connect(binance).transfer(wallet.address, tokenBalance.toString());
