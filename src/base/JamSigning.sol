@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/interfaces/IERC1271.sol";
 /// @title JamSigning
 /// @notice Functions which handles the signing and validation of Jam orders
 abstract contract JamSigning {
-    mapping(uint256 => uint256) private invalidNonces;
+    mapping(address => mapping(uint256 => uint256)) private takerInvalidNonces;
 
     bytes32 private constant DOMAIN_NAME = keccak256("JamSettlement");
     bytes32 private constant DOMAIN_VERSION = keccak256("1");
@@ -121,17 +121,6 @@ abstract contract JamSigning {
         }
     }
 
-    /// @notice Check if nonce is valid and invalidate it
-    /// @param nonce The nonce to invalidate
-    function invalidateOrderNonce(uint256 nonce) private {
-        require(nonce != 0, "ZERO_NONCE");
-        uint256 invalidatorSlot = nonce >> 8;
-        uint256 invalidatorBit = 1 << (nonce & 0xff);
-        uint256 invalidator = invalidNonces[invalidatorSlot];
-        require(invalidator & invalidatorBit != invalidatorBit, "INVALID_NONCE");
-        invalidNonces[invalidatorSlot] = invalidator | invalidatorBit;
-    }
-
     /// @notice validate all information about the order
     /// @param order The order to validate
     /// @param hooks User's hooks to validate
@@ -147,8 +136,24 @@ abstract contract JamSigning {
         require(order.buyTokens.length == order.buyTokenTransfers.length, "INVALID_BUY_TRANSFERS_LENGTH");
         require(order.sellTokens.length == order.sellAmounts.length, "INVALID_SELL_TOKENS_LENGTH");
         require(order.sellTokens.length == order.sellTokenTransfers.length, "INVALID_SELL_TRANSFERS_LENGTH");
-        invalidateOrderNonce(order.nonce);
+        invalidateOrderNonce(order.taker, order.nonce);
         require(block.timestamp < order.expiry, "ORDER_EXPIRED");
+    }
+
+    function cancelLimitOrder(uint256 nonce) external {
+        invalidateOrderNonce(msg.sender, nonce);
+    }
+
+    /// @notice Check if nonce is valid and invalidate it
+    /// @param nonce The nonce to invalidate
+    function invalidateOrderNonce(address taker, uint256 nonce) private {
+        require(nonce != 0, "ZERO_NONCE");
+        uint256 invalidatorSlot = nonce >> 8;
+        uint256 invalidatorBit = 1 << (nonce & 0xff);
+        mapping(uint256 => uint256) storage invalidNonces = takerInvalidNonces[taker];
+        uint256 invalidator = invalidNonces[invalidatorSlot];
+        require(invalidator & invalidatorBit != invalidatorBit, "INVALID_NONCE");
+        invalidNonces[invalidatorSlot] = invalidator | invalidatorBit;
     }
 
     /// @notice validate if increased amounts are more than initial amounts that user signed

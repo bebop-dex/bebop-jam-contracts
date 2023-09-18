@@ -400,5 +400,25 @@ describe("JamSettlement", function () {
         buyTokenTransfers, null, false, false, true)
   });
 
+  it('Limit order cancellation', async function () {
+    // user places limit order by signing the order
+    let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let jamOrder: JamOrder.DataStruct = getOrder(
+        "Simple", fixture.user.address, sellTokenTransfers, buyTokenTransfers, 9999999999
+    )!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
+
+    // user cancels this limit order
+    await fixture.settlement.connect(fixture.user).cancelLimitOrder(jamOrder.nonce)
+    try {
+      // should fail because this limit order was cancelled
+      await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers)
+    } catch (e){
+      return
+    }
+    throw Error("Error was expected")
+  });
+
 
 });

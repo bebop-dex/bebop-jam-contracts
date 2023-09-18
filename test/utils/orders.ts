@@ -26,8 +26,8 @@ const AMOUNTS = {
     "AAVE_1": ethers.utils.parseUnits("0.2", 18).toString(),
 }
 
-export function getOrder(orderType: string, takerAddress: string, sellCommands: Commands[], buyCommands: Commands[]): JamOrder.DataStruct {
-    let expiry = Math.floor(Date.now() / 1000) + 1000;
+export function getOrder(orderType: string, takerAddress: string, sellCommands: Commands[], buyCommands: Commands[], _expiry: number | undefined = undefined): JamOrder.DataStruct {
+    let expiry = _expiry === undefined ? Math.floor(Date.now() / 1000) + 1000 : _expiry;
     let nonce = Math.floor(Math.random() * 1000000);
     if (orderType === "Simple"){
         return {
