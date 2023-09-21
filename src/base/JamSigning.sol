@@ -50,7 +50,9 @@ abstract contract JamSigning {
     /// @param hooks pre and post interactions to hash
     /// @return The hash of the interactions
     function hashHooks(JamHooks.Def calldata hooks) public pure returns (bytes32) {
-        // TODO: optimise with encodePacked?
+        if (hooks.afterSettle.length == 0 && hooks.beforeSettle.length == 0){
+            return bytes32(0);
+        }
         return keccak256(abi.encode(hooks));
     }
 

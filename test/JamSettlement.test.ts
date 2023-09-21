@@ -59,9 +59,10 @@ describe("JamSettlement", function () {
       interactions = solverCalls
     }
 
-    jamOrder.hooksHash = utils.keccak256(
-        utils.defaultAbiCoder.encode(fixture.settlement.interface.getFunction("hashHooks").inputs, [hooks])
-    )
+    jamOrder.hooksHash = hooks === emptyHooks ?
+        "0x0000000000000000000000000000000000000000000000000000000000000000": utils.keccak256(
+          utils.defaultAbiCoder.encode(fixture.settlement.interface.getFunction("hashHooks").inputs, [hooks])
+        )
     const signature = await signJamOrder(user, jamOrder, settlement);
 
     let [userBalancesBefore, solverBalancesBefore] = await getBalancesBefore(
