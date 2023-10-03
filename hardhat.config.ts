@@ -68,7 +68,11 @@ const config: HardhatUserConfig = {
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
     },
     ethereum: {
-      url: 'https://eth.llamarpc.com',
+      url: 'https://eth-mainnet.g.alchemy.com/v2/Q39gdiKfeBSD5lr30t-OJQzl5VIgbwVR',
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined
+    },
+    arbitrum: {
+      url: 'https://arb-mainnet.g.alchemy.com/v2/Q39gdiKfeBSD5lr30t-OJQzl5VIgbwVR',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined
     }
   }

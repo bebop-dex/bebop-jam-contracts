@@ -1,5 +1,5 @@
 function getPermit2Address(chainId: number) {
-  if ([137, 1].includes(chainId)) {
+  if ([137, 1, 42161].includes(chainId)) {
     return '0x000000000022D473030F116dDEE9F6B43aC78BA3'
   }
 
