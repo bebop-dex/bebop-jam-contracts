@@ -34,7 +34,8 @@ describe("JamSettlement", function () {
       usingSolverContract: boolean = true,
       skipTakerApprovals: boolean = false,
       directSettle: boolean = false,
-      directSettleIncreasedAmounts: BigNumberish[] = []
+      directSettleIncreasedAmounts: BigNumberish[] = [],
+      curFillPercent: number = 10000
   ) {
     const { user, settlement, solver, solverContract, directMaker } = fixture;
 
@@ -44,12 +45,20 @@ describe("JamSettlement", function () {
       nativeTokenAmount = await approveTokens(jamOrder.sellTokens, jamOrder.sellAmounts, sellTokensTransfers, user, fixture.balanceManager.address);
     }
 
+    // Change buy amounts
+    let changedBuyAmounts = JSON.parse(JSON.stringify(directSettleIncreasedAmounts.length > 0 ? directSettleIncreasedAmounts : jamOrder.buyAmounts))
+    if (curFillPercent !== 10000){
+      for (let i = 0; i < changedBuyAmounts.length; i++){
+        changedBuyAmounts[i] = BigNumber.from(changedBuyAmounts[i]).mul(curFillPercent).div(10000)
+      }
+    }
+
     let interactions: JamInteraction.DataStruct[];
     let executor = solver;
     let solverExcess = 1000
     if (usingSolverContract) {
       let executeOnSolverContract = await solverContract.populateTransaction.execute(
-          solverCalls, jamOrder.buyTokens, jamOrder.buyAmounts, jamOrder.buyNFTIds, jamOrder.buyTokenTransfers, settlement.address
+          solverCalls, jamOrder.buyTokens, changedBuyAmounts, jamOrder.buyNFTIds, jamOrder.buyTokenTransfers, settlement.address
       );
       interactions = [
         { result: true, to: executeOnSolverContract.to!, data: executeOnSolverContract.data!, value: nativeTokenAmount.toString() }
@@ -68,24 +77,23 @@ describe("JamSettlement", function () {
     let [userBalancesBefore, solverBalancesBefore] = await getBalancesBefore(
         jamOrder.buyTokens, jamOrder.receiver, buyTokensTransfers, jamOrder.buyNFTIds, solverContract.address)
 
-    let increasedAmounts = directSettleIncreasedAmounts.length > 0 ? directSettleIncreasedAmounts : jamOrder.buyAmounts
     if (directSettle) {
-      nativeTokenAmount = await approveTokens(jamOrder.buyTokens, increasedAmounts, buyTokensTransfers, directMaker, fixture.balanceManager.address)
+      nativeTokenAmount = await approveTokens(jamOrder.buyTokens, changedBuyAmounts, buyTokensTransfers, directMaker, fixture.balanceManager.address)
       if (takerPermitsInfo === null) {
-        await settlement.connect(directMaker).settleInternal(jamOrder, signature, hooks, increasedAmounts, {value: nativeTokenAmount.toString()});
+        await settlement.connect(directMaker).settleInternal(jamOrder, signature, hooks, directSettleIncreasedAmounts, curFillPercent, {value: nativeTokenAmount.toString()});
       } else {
-        await settlement.connect(directMaker).settleInternalWithTakerPermits(jamOrder, signature, takerPermitsInfo, hooks, increasedAmounts, {value: nativeTokenAmount.toString()});
+        await settlement.connect(directMaker).settleInternalWithTakerPermits(jamOrder, signature, takerPermitsInfo, hooks, directSettleIncreasedAmounts, curFillPercent, {value: nativeTokenAmount.toString()});
       }
     } else {
         if (takerPermitsInfo === null) {
-          await settlement.connect(executor).settle(jamOrder, signature, interactions, hooks, balanceRecipient, {value: nativeTokenAmount.toString()});
+          await settlement.connect(executor).settle(jamOrder, signature, interactions, hooks, balanceRecipient, curFillPercent, {value: nativeTokenAmount.toString()});
         } else {
-          await settlement.connect(executor).settleWithTakerPermits(jamOrder, signature, takerPermitsInfo, interactions, hooks, balanceRecipient, {value: nativeTokenAmount.toString()});
+          await settlement.connect(executor).settleWithTakerPermits(jamOrder, signature, takerPermitsInfo, interactions, hooks, balanceRecipient, curFillPercent, {value: nativeTokenAmount.toString()});
         }
     }
 
     await verifyBalancesAfter(jamOrder.buyTokens, jamOrder.receiver, sellTokensTransfers, buyTokensTransfers, jamOrder.buyNFTIds, solverContract.address,
-        usingSolverContract, increasedAmounts, solverExcess, userBalancesBefore, solverBalancesBefore, directSettle, settlement.address)
+        usingSolverContract, changedBuyAmounts, solverExcess, userBalancesBefore, solverBalancesBefore, directSettle, settlement.address)
   }
 
   before(async () => {
@@ -406,7 +414,7 @@ describe("JamSettlement", function () {
     let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
     let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
     let jamOrder: JamOrder.DataStruct = getOrder(
-        "Simple", fixture.user.address, sellTokenTransfers, buyTokenTransfers, 9999999999
+        "Simple", fixture.user.address, sellTokenTransfers, buyTokenTransfers, 10000,9999999999
     )!
     let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
 
@@ -417,6 +425,89 @@ describe("JamSettlement", function () {
       await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers)
     } catch (e){
       return
+    }
+    throw Error("Error was expected")
+  });
+
+  //-----------------------------------------
+  //
+  //             PartialFill tests
+  //
+  // -----------------------------------------
+
+  it('PartialFill simple', async function () {
+    let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let minFillPercent = 9000
+    let curFillPercent = 9500
+    let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, sellTokenTransfers, buyTokenTransfers, minFillPercent)!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker, curFillPercent)
+    await settle(
+        jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers,null,
+        true, false, false, [], curFillPercent
+    )
+  });
+
+  it('PartialFill with Permits', async function () {
+    let sellTokenTransfers: Commands[] = [
+      //    DYDX (permit)   WETH(traded before with Permit2)   SNX (permit2)
+      Commands.CALL_PERMIT_THEN_TRANSFER, Commands.PERMIT2_TRANSFER, Commands.CALL_PERMIT2_THEN_TRANSFER
+    ]
+    let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let minFillPercent = 9000
+    let curFillPercent = 9000
+    let jamOrder: JamOrder.DataStruct = getOrder("Permits-fresh-mix", fixture.user.address, sellTokenTransfers, buyTokenTransfers, minFillPercent)!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker, curFillPercent)
+    let permitsDeadline: number = Math.floor(Date.now() / 1000) + 10000
+    let fullPermitsData: Signature.TakerPermitsInfoStruct = await signPermit2(
+        fixture.user, [TOKENS.SNX], fixture.balanceManager.address, permitsDeadline
+    )
+    let extraPermitData: Signature.TakerPermitsInfoStruct = await signPermit(
+        fixture.user, TOKENS.DYDX, fixture.balanceManager.address, permitsDeadline
+    )
+    fullPermitsData.permitSignatures = extraPermitData.permitSignatures
+    await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers, fullPermitsData,
+        true, false, false, [], curFillPercent)
+  });
+
+  it('PartialFill with settleInternal', async function () {
+    let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let minFillPercent = 9000
+    let curFillPercent = 9200
+    let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, sellTokenTransfers, buyTokenTransfers, minFillPercent)!
+    let solverCalls: JamInteraction.DataStruct[] = []
+    await settle(jamOrder, "0x", emptyHooks, solverCalls, sellTokenTransfers,
+        buyTokenTransfers, null, false, false, true, [], curFillPercent)
+  });
+
+  it('PartialFill with settleInternal+increased amounts', async function () {
+    let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let minFillPercent = 9000
+    let curFillPercent = 9000
+    let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, sellTokenTransfers, buyTokenTransfers, minFillPercent)!
+    let solverCalls: JamInteraction.DataStruct[] = []
+    let increasedBuyAmounts: BigNumberish[] = [(Number(jamOrder.buyAmounts[0]) + 99999).toString()]
+    await settle(jamOrder, "0x", emptyHooks, solverCalls, sellTokenTransfers,
+        buyTokenTransfers, null, false, false, true, increasedBuyAmounts, curFillPercent)
+  });
+
+
+  it('PartialFill fail - invalid percent', async function () {
+    let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
+    let minFillPercent = 9000
+    let curFillPercent = 8999
+    let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, sellTokenTransfers, buyTokenTransfers, minFillPercent)!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
+    try {
+      await settle(
+          jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers,null,
+          true, false, false, [], curFillPercent
+      )
+    } catch (e){
+        return
     }
     throw Error("Error was expected")
   });

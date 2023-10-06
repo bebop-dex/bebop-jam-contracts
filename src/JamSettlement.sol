@@ -10,6 +10,7 @@ import "./interfaces/IWETH.sol";
 import "./libraries/JamInteraction.sol";
 import "./libraries/JamOrder.sol";
 import "./libraries/JamHooks.sol";
+import "./libraries/common/BMath.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
@@ -47,16 +48,18 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
         Signature.TypedSignature calldata signature,
         JamInteraction.Data[] calldata interactions,
         JamHooks.Def calldata hooks,
-        address balanceRecipient
+        address balanceRecipient,
+        uint16 curFillPercent
     ) external payable nonReentrant {
-        validateOrder(order, hooks, signature);
+        validateOrder(order, hooks, signature, curFillPercent);
         require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
         balanceManager.transferTokens(
             IJamBalanceManager.TransferData(
-                order.taker, balanceRecipient, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
+                order.taker, balanceRecipient, order.sellTokens, order.sellAmounts,
+                order.sellNFTIds, order.sellTokenTransfers, curFillPercent
             )
         );
-        _settle(order, interactions, hooks);
+        _settle(order, interactions, hooks, curFillPercent);
     }
 
     /// @inheritdoc IJamSettlement
@@ -66,16 +69,18 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
         Signature.TakerPermitsInfo calldata takerPermitsInfo,
         JamInteraction.Data[] calldata interactions,
         JamHooks.Def calldata hooks,
-        address balanceRecipient
+        address balanceRecipient,
+        uint16 curFillPercent
     ) external payable nonReentrant {
-        validateOrder(order, hooks, signature);
+        validateOrder(order, hooks, signature, curFillPercent);
         require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
         balanceManager.transferTokensWithPermits(
             IJamBalanceManager.TransferData(
-                order.taker, balanceRecipient, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
+                order.taker, balanceRecipient, order.sellTokens, order.sellAmounts,
+                order.sellNFTIds, order.sellTokenTransfers, curFillPercent
             ), takerPermitsInfo
         );
-        _settle(order, interactions, hooks);
+        _settle(order, interactions, hooks, curFillPercent);
     }
 
     /// @inheritdoc IJamSettlement
@@ -83,16 +88,18 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
         JamOrder.Data calldata order,
         Signature.TypedSignature calldata signature,
         JamHooks.Def calldata hooks,
-        uint256[] calldata increasedBuyAmounts
+        uint256[] calldata increasedBuyAmounts,
+        uint16 curFillPercent
     ) external payable nonReentrant {
-        validateOrder(order, hooks, signature);
+        validateOrder(order, hooks, signature, curFillPercent);
         require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
         balanceManager.transferTokens(
             IJamBalanceManager.TransferData(
-                order.taker, msg.sender, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
+                order.taker, msg.sender, order.sellTokens, order.sellAmounts,
+                order.sellNFTIds, order.sellTokenTransfers, curFillPercent
             )
         );
-        _settleInternal(order, hooks, increasedBuyAmounts);
+        _settleInternal(order, hooks, increasedBuyAmounts, curFillPercent);
     }
 
     /// @inheritdoc IJamSettlement
@@ -101,22 +108,25 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
         Signature.TypedSignature calldata signature,
         Signature.TakerPermitsInfo calldata takerPermitsInfo,
         JamHooks.Def calldata hooks,
-        uint256[] calldata increasedBuyAmounts
+        uint256[] calldata increasedBuyAmounts,
+        uint16 curFillPercent
     ) external payable nonReentrant {
-        validateOrder(order, hooks, signature);
+        validateOrder(order, hooks, signature, curFillPercent);
         require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
         balanceManager.transferTokensWithPermits(
             IJamBalanceManager.TransferData(
-                order.taker, msg.sender, order.sellTokens, order.sellAmounts, order.sellNFTIds, order.sellTokenTransfers
+                order.taker, msg.sender, order.sellTokens, order.sellAmounts,
+                order.sellNFTIds, order.sellTokenTransfers, curFillPercent
             ), takerPermitsInfo
         );
-        _settleInternal(order, hooks, increasedBuyAmounts);
+        _settleInternal(order, hooks, increasedBuyAmounts, curFillPercent);
     }
 
     function _settle(
         JamOrder.Data calldata order,
         JamInteraction.Data[] calldata interactions,
-        JamHooks.Def calldata hooks
+        JamHooks.Def calldata hooks,
+        uint16 curFillPercent
     ) private {
         if (order.receiver == address(this)){
             uint256[] memory initialReceiverBalances = getInitialBalances(
@@ -130,7 +140,7 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
         } else {
             require(runInteractions(interactions), "INTERACTIONS_FAILED");
             transferTokensFromContract(
-                order.buyTokens, order.buyAmounts, order.buyNFTIds, order.buyTokenTransfers, order.receiver
+                order.buyTokens, order.buyAmounts, order.buyNFTIds, order.buyTokenTransfers, order.receiver, curFillPercent
             );
         }
         require(runInteractions(hooks.afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
@@ -140,12 +150,13 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
     function _settleInternal(
         JamOrder.Data calldata order,
         JamHooks.Def calldata hooks,
-        uint256[] calldata increasedBuyAmounts
+        uint256[] calldata increasedBuyAmounts,
+        uint16 curFillPercent
     ) private {
         uint256[] calldata buyAmounts = validateIncreasedAmounts(increasedBuyAmounts, order.buyAmounts);
         balanceManager.transferTokens(
             IJamBalanceManager.TransferData(
-                msg.sender, order.receiver, order.buyTokens, buyAmounts, order.buyNFTIds, order.buyTokenTransfers
+                msg.sender, order.receiver, order.buyTokens, buyAmounts, order.buyNFTIds, order.buyTokenTransfers, curFillPercent
             )
         );
         require(runInteractions(hooks.afterSettle), "AFTER_SETTLE_HOOKS_FAILED");

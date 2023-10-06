@@ -15,6 +15,7 @@ interface IJamBalanceManager {
         uint256[] amounts;
         uint256[] nftIds;
         bytes tokenTransferTypes;
+        uint16 fillPercent;
     }
 
     /// @dev indices for transferTokensWithPermits function

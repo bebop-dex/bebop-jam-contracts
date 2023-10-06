@@ -11,8 +11,9 @@ const JAM_ORDER_TYPES = {
     "JamOrder": [
         { "name": "taker", "type": "address" },
         { "name": "receiver", "type": "address" },
-        { "name": "expiry", "type": "uint32" },
+        { "name": "expiry", "type": "uint256" },
         { "name": "nonce", "type": "uint256" },
+        { "name": "minFillPercent", "type": "uint16" },
         { "name": "hooksHash", "type": "bytes32" },
         { "name": "sellTokens", "type": "address[]" },
         { "name": "buyTokens", "type": "address[]" },
@@ -32,7 +33,6 @@ export async function signJamOrder(user: SignerWithAddress, order: JamOrder.Data
         "chainId": await user.getChainId(),
         "verifyingContract": settlement.address
     }
-
     const signatureBytes = await user._signTypedData(JAM_DOMAIN, JAM_ORDER_TYPES, order);
     const signature: Signature.TypedSignatureStruct = {
         signatureType: 1,

@@ -23,7 +23,8 @@ interface IJamSettlement {
         Signature.TypedSignature calldata signature,
         JamInteraction.Data[] calldata interactions,
         JamHooks.Def calldata hooks,
-        address balanceRecipient
+        address balanceRecipient,
+        uint16 curFillPercent
     ) external payable;
 
     /// @dev Settle a jam order using taker's Permit/Permit2.
@@ -39,7 +40,8 @@ interface IJamSettlement {
         Signature.TakerPermitsInfo calldata takerPermitsInfo,
         JamInteraction.Data[] calldata interactions,
         JamHooks.Def calldata hooks,
-        address balanceRecipient
+        address balanceRecipient,
+        uint16 curFillPercent
     ) external payable;
 
     /// @dev Settle a jam order.
@@ -53,7 +55,8 @@ interface IJamSettlement {
         JamOrder.Data calldata order,
         Signature.TypedSignature calldata signature,
         JamHooks.Def calldata hooks,
-        uint256[] calldata increasedBuyAmounts
+        uint256[] calldata increasedBuyAmounts,
+        uint16 curFillPercent
     ) external payable;
 
     /// @dev Settle a jam order using taker's Permit/Permit2.
@@ -68,6 +71,7 @@ interface IJamSettlement {
         Signature.TypedSignature calldata signature,
         Signature.TakerPermitsInfo calldata takerPermitsInfo,
         JamHooks.Def calldata hooks,
-        uint256[] calldata increasedBuyAmounts
+        uint256[] calldata increasedBuyAmounts,
+        uint16 curFillPercent
     ) external payable;
 }

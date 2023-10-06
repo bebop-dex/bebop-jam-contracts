@@ -23,7 +23,7 @@ abstract contract JamSigning {
     ));
 
     bytes32 public constant JAM_ORDER_TYPE_HASH = keccak256(abi.encodePacked(
-        "JamOrder(address taker,address receiver,uint32 expiry,uint256 nonce,bytes32 hooksHash,address[] sellTokens,address[] buyTokens,uint256[] sellAmounts,uint256[] buyAmounts,uint256[] sellNFTIds,uint256[] buyNFTIds,bytes sellTokenTransfers,bytes buyTokenTransfers)"
+        "JamOrder(address taker,address receiver,uint256 expiry,uint256 nonce,uint16 minFillPercent,bytes32 hooksHash,address[] sellTokens,address[] buyTokens,uint256[] sellAmounts,uint256[] buyAmounts,uint256[] sellNFTIds,uint256[] buyNFTIds,bytes sellTokenTransfers,bytes buyTokenTransfers)"
     ));
 
     bytes32 private immutable _CACHED_DOMAIN_SEPARATOR;
@@ -59,33 +59,49 @@ abstract contract JamSigning {
     /// @notice Hash the order info and hooks
     /// @param order The order to hash
     /// @param hooksHash The hash of the hooks
-    /// @return The hash of the order
-    function hashOrder(JamOrder.Data calldata order, bytes32 hooksHash) public view returns (bytes32) {
-        return
-        keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                DOMAIN_SEPARATOR(),
-                keccak256(
-                    abi.encode(
-                        JAM_ORDER_TYPE_HASH,
-                        order.taker,
-                        order.receiver,
-                        order.expiry,
-                        order.nonce,
-                        hooksHash,
-                        keccak256(abi.encodePacked(order.sellTokens)),
-                        keccak256(abi.encodePacked(order.buyTokens)),
-                        keccak256(abi.encodePacked(order.sellAmounts)),
-                        keccak256(abi.encodePacked(order.buyAmounts)),
-                        keccak256(abi.encodePacked(order.sellNFTIds)),
-                        keccak256(abi.encodePacked(order.buyNFTIds)),
-                        keccak256(order.sellTokenTransfers),
-                        keccak256(order.buyTokenTransfers)
-                    )
-                )
-            )
-        );
+    /// @return orderHash
+    function hashOrder(JamOrder.Data memory order, bytes32 hooksHash) public view returns (bytes32 orderHash) {
+        bytes32 dataHash;
+        bytes32 domainSeparator = DOMAIN_SEPARATOR();
+        bytes32 typeHash = JAM_ORDER_TYPE_HASH;
+        bytes32 sellTokensHash = keccak256(abi.encodePacked(order.sellTokens));
+        bytes32 buyTokensHash = keccak256(abi.encodePacked(order.buyTokens));
+        bytes32 sellAmountsHash = keccak256(abi.encodePacked(order.sellAmounts));
+        bytes32 buyAmountsHash = keccak256(abi.encodePacked(order.buyAmounts));
+        bytes32 sellNFTIdsHash = keccak256(abi.encodePacked(order.sellNFTIds));
+        bytes32 buyNFTIdsHash = keccak256(abi.encodePacked(order.buyNFTIds));
+        bytes32 sellTokenTransfers = keccak256(order.sellTokenTransfers);
+        bytes32 buyTokenTransfers = keccak256(order.buyTokenTransfers);
+
+        assembly {
+            let dataStart := sub(order, 32)
+            let temp := mload(dataStart)
+
+            mstore(dataStart, typeHash)
+
+            // Store all array's hashes after: typeHash, taker, receiver, expiry, nonce, minFillPercent
+            mstore(add(order, 160), hooksHash) // 160 = 5 * 32, skip: taker, receiver, expiry, nonce, minFillPercent
+            mstore(add(order, 192), sellTokensHash)
+            mstore(add(order, 224), buyTokensHash)
+            mstore(add(order, 256), sellAmountsHash)
+            mstore(add(order, 288), buyAmountsHash)
+            mstore(add(order, 320), sellNFTIdsHash)
+            mstore(add(order, 352), buyNFTIdsHash)
+            mstore(add(order, 384), sellTokenTransfers)
+            mstore(add(order, 416), buyTokenTransfers)
+
+            // Hash data 480 = (1 + 5 + 9) * 32, where 1 - typeHash | 5 - first five simple fields in order | 9 - all hashes of arrays
+            dataHash := keccak256(dataStart, 480)
+
+            // Restore memory
+            mstore(dataStart, temp)
+
+            let freeMemoryPointer := mload(0x40)
+            mstore(freeMemoryPointer, "\x19\x01")
+            mstore(add(freeMemoryPointer, 2), domainSeparator)
+            mstore(add(freeMemoryPointer, 34), dataHash)
+            orderHash := keccak256(freeMemoryPointer, 66)
+        }
     }
 
     /// @notice Validate the order signature
@@ -127,7 +143,10 @@ abstract contract JamSigning {
     /// @param order The order to validate
     /// @param hooks User's hooks to validate
     /// @param signature The signature to check against
-    function validateOrder(JamOrder.Data calldata order, JamHooks.Def calldata hooks, Signature.TypedSignature calldata signature) public {
+    /// @param curFillPercent Solver/Maker fill percent
+    function validateOrder(
+        JamOrder.Data calldata order, JamHooks.Def calldata hooks, Signature.TypedSignature calldata signature, uint16 curFillPercent
+    ) public {
         // Allow settle from user without sig
         if (order.taker != msg.sender) {
             bytes32 hooksHash = hashHooks(hooks);
@@ -138,6 +157,7 @@ abstract contract JamSigning {
         require(order.buyTokens.length == order.buyTokenTransfers.length, "INVALID_BUY_TRANSFERS_LENGTH");
         require(order.sellTokens.length == order.sellAmounts.length, "INVALID_SELL_TOKENS_LENGTH");
         require(order.sellTokens.length == order.sellTokenTransfers.length, "INVALID_SELL_TRANSFERS_LENGTH");
+        require(curFillPercent >= order.minFillPercent, "INVALID_FILL_PERCENT");
         invalidateOrderNonce(order.taker, order.nonce);
         require(block.timestamp < order.expiry, "ORDER_EXPIRED");
     }

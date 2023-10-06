@@ -2,6 +2,7 @@
 pragma solidity ^0.8.17;
 
 import "../libraries/JamOrder.sol";
+import "../libraries/common/BMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
@@ -25,18 +26,19 @@ abstract contract JamTransfer {
         uint256[] calldata amounts,
         uint256[] calldata nftIds,
         bytes calldata tokenTransferTypes,
-        address receiver
+        address receiver,
+        uint16 fillPercent
     ) internal {
         uint nftInd;
         for (uint i; i < tokens.length; ++i) {
             if (tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER) {
                 uint tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
-                require(tokenBalance >= amounts[i], "INVALID_OUTPUT_TOKEN_BALANCE");
+                require(tokenBalance >= BMath.getPercentage(amounts[i], fillPercent), "INVALID_OUTPUT_TOKEN_BALANCE");
                 IERC20(tokens[i]).safeTransfer(receiver, tokenBalance);
             } else if (tokenTransferTypes[i] == Commands.NATIVE_TRANSFER){
                 require(tokens[i] == JamOrder.NATIVE_TOKEN, "INVALID_NATIVE_TOKEN");
                 uint tokenBalance = address(this).balance;
-                require(tokenBalance >= amounts[i], "INVALID_OUTPUT_NATIVE_BALANCE");
+                require(tokenBalance >= BMath.getPercentage(amounts[i], fillPercent), "INVALID_OUTPUT_NATIVE_BALANCE");
                 (bool sent, ) = payable(receiver).call{value: tokenBalance}("");
                 require(sent, "FAILED_TO_SEND_ETH");
             } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {

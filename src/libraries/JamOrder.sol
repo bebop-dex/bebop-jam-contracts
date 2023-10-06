@@ -24,6 +24,7 @@ library JamOrder {
         address receiver;
         uint256 expiry;
         uint256 nonce;
+        uint16 minFillPercent;
         bytes32 hooksHash; // keccak256(pre interactions + post interactions)
         address[] sellTokens;
         address[] buyTokens;

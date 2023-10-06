@@ -7,6 +7,7 @@ import "./interfaces/IDaiLikePermit.sol";
 import "./libraries/JamOrder.sol";
 import "./libraries/Signature.sol";
 import "./libraries/common/SafeCast160.sol";
+import "./libraries/common/BMath.sol";
 import "./base/JamTransfer.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
@@ -46,11 +47,15 @@ contract JamBalanceManager is IJamBalanceManager {
         uint nftsInd;
         for (uint i; i < data.tokens.length; ++i) {
             if (data.tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER) {
-                IERC20(data.tokens[i]).safeTransferFrom(data.from, data.receiver, data.amounts[i]);
+                IERC20(data.tokens[i]).safeTransferFrom(
+                    data.from, data.receiver, BMath.getPercentage(data.amounts[i], data.fillPercent)
+                );
             } else if (data.tokenTransferTypes[i] == Commands.NATIVE_TRANSFER) {
                 require(data.tokens[i] == JamOrder.NATIVE_TOKEN, "INVALID_NATIVE_TOKEN_ADDRESS");
                 if (data.receiver != operator){
-                    JamTransfer(operator).transferNativeFromContract(data.receiver, data.amounts[i]);
+                    JamTransfer(operator).transferNativeFromContract(
+                        data.receiver, BMath.getPercentage(data.amounts[i], data.fillPercent)
+                    );
                 }
             } else if (data.tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
                 require(data.amounts[i] == 1, "INVALID_ERC721_AMOUNT");
@@ -79,7 +84,9 @@ contract JamBalanceManager is IJamBalanceManager {
                         data.from, data.tokens[i], takerPermitsInfo.deadline, takerPermitsInfo.permitSignatures[indices.permitSignaturesInd++]
                     );
                 }
-                IERC20(data.tokens[i]).safeTransferFrom(data.from, data.receiver, data.amounts[i]);
+                IERC20(data.tokens[i]).safeTransferFrom(
+                    data.from, data.receiver, BMath.getPercentage(data.amounts[i], data.fillPercent)
+                );
             } else if (data.tokenTransferTypes[i] == Commands.PERMIT2_TRANSFER || data.tokenTransferTypes[i] == Commands.CALL_PERMIT2_THEN_TRANSFER) {
                 if (data.tokenTransferTypes[i] == Commands.CALL_PERMIT2_THEN_TRANSFER){
                     batchToApprove[indices.batchToApproveInd] = IPermit2.PermitDetails({
@@ -97,14 +104,16 @@ contract JamBalanceManager is IJamBalanceManager {
                 batchTransferDetails[indices.batchLen++] = IPermit2.AllowanceTransferDetails({
                     from: data.from,
                     to: data.receiver,
-                    amount: SafeCast160.toUint160(data.amounts[i]),
+                    amount: SafeCast160.toUint160(BMath.getPercentage(data.amounts[i], data.fillPercent)),
                     token: data.tokens[i]
                 });
                 continue;
             } else if (data.tokenTransferTypes[i] == Commands.NATIVE_TRANSFER) {
                 require(data.tokens[i] == JamOrder.NATIVE_TOKEN, "INVALID_NATIVE_TOKEN_ADDRESS");
                 if (data.receiver != operator){
-                    JamTransfer(operator).transferNativeFromContract(data.receiver, data.amounts[i]);
+                    JamTransfer(operator).transferNativeFromContract(
+                        data.receiver, BMath.getPercentage(data.amounts[i], data.fillPercent)
+                    );
                 }
             } else if (data.tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
                 require(data.amounts[i] == 1, "INVALID_ERC721_AMOUNT");

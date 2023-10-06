@@ -26,13 +26,14 @@ export async function getBebopSolverCalls(
     jamOrder: JamOrder.DataStruct,
     bebop: BebopSettlement,
     takerAddress: string,
-    maker: SignerWithAddress
+    maker: SignerWithAddress,
+    curFillPercent: number = 10000
 ){
     const maker_nonce = Math.floor(Math.random() * 1000000);
     const taker_address = takerAddress;
     const receiver = takerAddress;
     const maker_address = maker.address;
-    const taker_amounts = jamOrder.sellAmounts;
+    const taker_amounts = [];
     const expiry = Math.floor(Date.now() / 1000) + 1000;
     const solverExcess = 1000;
     let maker_amounts = []
@@ -40,7 +41,7 @@ export async function getBebopSolverCalls(
     let maker_tokens = [];
     let commands = "0x"
     for (let i = 0; i < jamOrder.buyTokens.length; i++){
-        maker_amounts.push(BigNumber.from(jamOrder.buyAmounts[i]).add(solverExcess).toString());
+        maker_amounts.push(BigNumber.from(jamOrder.buyAmounts[i]).mul(curFillPercent).div(10000).add(solverExcess).toString());
         if (jamOrder.buyTokens[i] === TOKENS.ETH){
             maker_tokens.push(TOKENS.WETH)
             commands += "01"
@@ -53,6 +54,7 @@ export async function getBebopSolverCalls(
     let nativeTokenAmount = BigNumber.from(0)
     let solverCalls: JamInteraction.DataStruct[] = []
     for (let i = 0; i < jamOrder.sellTokens.length; i++){
+        taker_amounts.push(BigNumber.from(jamOrder.sellAmounts[i]).mul(curFillPercent).div(10000))
         if (jamOrder.sellTokens[i] === TOKENS.ETH){
             taker_tokens.push(TOKENS.WETH)
             nativeTokenAmount = nativeTokenAmount.add(taker_amounts[i])
