@@ -59,49 +59,39 @@ abstract contract JamSigning {
     /// @notice Hash the order info and hooks
     /// @param order The order to hash
     /// @param hooksHash The hash of the hooks
-    /// @return orderHash
-    function hashOrder(JamOrder.Data memory order, bytes32 hooksHash) public view returns (bytes32 orderHash) {
-        bytes32 dataHash;
-        bytes32 domainSeparator = DOMAIN_SEPARATOR();
-        bytes32 typeHash = JAM_ORDER_TYPE_HASH;
-        bytes32 sellTokensHash = keccak256(abi.encodePacked(order.sellTokens));
-        bytes32 buyTokensHash = keccak256(abi.encodePacked(order.buyTokens));
-        bytes32 sellAmountsHash = keccak256(abi.encodePacked(order.sellAmounts));
-        bytes32 buyAmountsHash = keccak256(abi.encodePacked(order.buyAmounts));
-        bytes32 sellNFTIdsHash = keccak256(abi.encodePacked(order.sellNFTIds));
-        bytes32 buyNFTIdsHash = keccak256(abi.encodePacked(order.buyNFTIds));
-        bytes32 sellTokenTransfers = keccak256(order.sellTokenTransfers);
-        bytes32 buyTokenTransfers = keccak256(order.buyTokenTransfers);
-
-        assembly {
-            let dataStart := sub(order, 32)
-            let temp := mload(dataStart)
-
-            mstore(dataStart, typeHash)
-
-            // Store all array's hashes after: typeHash, taker, receiver, expiry, nonce, minFillPercent
-            mstore(add(order, 160), hooksHash) // 160 = 5 * 32, skip: taker, receiver, expiry, nonce, minFillPercent
-            mstore(add(order, 192), sellTokensHash)
-            mstore(add(order, 224), buyTokensHash)
-            mstore(add(order, 256), sellAmountsHash)
-            mstore(add(order, 288), buyAmountsHash)
-            mstore(add(order, 320), sellNFTIdsHash)
-            mstore(add(order, 352), buyNFTIdsHash)
-            mstore(add(order, 384), sellTokenTransfers)
-            mstore(add(order, 416), buyTokenTransfers)
-
-            // Hash data 480 = (1 + 5 + 9) * 32, where 1 - typeHash | 5 - first five simple fields in order | 9 - all hashes of arrays
-            dataHash := keccak256(dataStart, 480)
-
-            // Restore memory
-            mstore(dataStart, temp)
-
-            let freeMemoryPointer := mload(0x40)
-            mstore(freeMemoryPointer, "\x19\x01")
-            mstore(add(freeMemoryPointer, 2), domainSeparator)
-            mstore(add(freeMemoryPointer, 34), dataHash)
-            orderHash := keccak256(freeMemoryPointer, 66)
-        }
+    /// @return The hash of the order
+    function hashOrder(JamOrder.Data calldata order, bytes32 hooksHash) public view returns (bytes32) {
+        bytes32 dataHash = keccak256(
+        // divide order into two parts and encode them separately to avoid stack too deep exception
+            bytes.concat(
+                abi.encode(
+                    JAM_ORDER_TYPE_HASH,
+                    order.taker,
+                    order.receiver,
+                    order.expiry,
+                    order.nonce,
+                    order.minFillPercent,
+                    hooksHash
+                ),
+                abi.encode(
+                    keccak256(abi.encodePacked(order.sellTokens)),
+                    keccak256(abi.encodePacked(order.buyTokens)),
+                    keccak256(abi.encodePacked(order.sellAmounts)),
+                    keccak256(abi.encodePacked(order.buyAmounts)),
+                    keccak256(abi.encodePacked(order.sellNFTIds)),
+                    keccak256(abi.encodePacked(order.buyNFTIds)),
+                    keccak256(order.sellTokenTransfers),
+                    keccak256(order.buyTokenTransfers)
+                )
+            )
+        );
+        return keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPARATOR(),
+                dataHash
+            )
+        );
     }
 
     /// @notice Validate the order signature
