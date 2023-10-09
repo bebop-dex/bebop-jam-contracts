@@ -2,7 +2,13 @@ import {waffle} from "hardhat";
 import {getFixture} from './utils/fixture'
 import BebopSettlementABI from './bebop/BebopSettlement.json'
 import {BigNumber, BigNumberish, utils} from "ethers";
-import {JamHooks, JamInteraction, JamOrder, JamSettlement} from "../typechain-types/artifacts/src/JamSettlement";
+import {
+  ExecInfo,
+  JamHooks,
+  JamInteraction,
+  JamOrder,
+  JamSettlement
+} from "../typechain-types/artifacts/src/JamSettlement";
 import {BebopSettlement} from "../typechain-types";
 import {BINANCE_ADDRESS, PERMIT2_ADDRESS, TOKENS} from "./config";
 import {approveTokens, getBalancesBefore, signJamOrder, verifyBalancesAfter} from "./utils/utils";
@@ -18,10 +24,12 @@ describe("JamSettlement", function () {
   let bebop: BebopSettlement;
   let hooksGenerator: HooksGenerator;
 
-  let emptyHooks: JamHooks.DefStruct = {
+  const emptyHooks: JamHooks.DefStruct = {
     beforeSettle: [],
     afterSettle: []
   }
+  const emptyHooksHash = "0x0000000000000000000000000000000000000000000000000000000000000000"
+
 
   async function settle(
       jamOrder: JamOrder.DataStruct,
@@ -68,10 +76,9 @@ describe("JamSettlement", function () {
       interactions = solverCalls
     }
 
-    jamOrder.hooksHash = hooks === emptyHooks ?
-        "0x0000000000000000000000000000000000000000000000000000000000000000": utils.keccak256(
-          utils.defaultAbiCoder.encode(fixture.settlement.interface.getFunction("hashHooks").inputs, [hooks])
-        )
+    jamOrder.hooksHash = hooks === emptyHooks ? emptyHooksHash: utils.keccak256(
+        utils.defaultAbiCoder.encode(fixture.settlement.interface.getFunction("hashHooks").inputs, [hooks])
+    )
     const signature = await signJamOrder(user, jamOrder, settlement);
 
     let [userBalancesBefore, solverBalancesBefore] = await getBalancesBefore(
@@ -79,16 +86,24 @@ describe("JamSettlement", function () {
 
     if (directSettle) {
       nativeTokenAmount = await approveTokens(jamOrder.buyTokens, changedBuyAmounts, buyTokensTransfers, directMaker, fixture.balanceManager.address)
+      const makerData: ExecInfo.MakerDataStruct = {increasedBuyAmounts: directSettleIncreasedAmounts, curFillPercent}
       if (takerPermitsInfo === null) {
-        await settlement.connect(directMaker).settleInternal(jamOrder, signature, hooks, directSettleIncreasedAmounts, curFillPercent, {value: nativeTokenAmount.toString()});
+        await settlement.connect(directMaker).settleInternal(jamOrder, signature, hooks, makerData, {value: nativeTokenAmount.toString()});
       } else {
-        await settlement.connect(directMaker).settleInternalWithTakerPermits(jamOrder, signature, takerPermitsInfo, hooks, directSettleIncreasedAmounts, curFillPercent, {value: nativeTokenAmount.toString()});
+        await settlement.connect(directMaker).settleInternalWithTakerPermits(
+            jamOrder, signature, takerPermitsInfo, hooks, makerData, {value: nativeTokenAmount.toString()}
+        );
       }
     } else {
+      const solverData: ExecInfo.SolverDataStruct = {balanceRecipient, curFillPercent}
         if (takerPermitsInfo === null) {
-          await settlement.connect(executor).settle(jamOrder, signature, interactions, hooks, balanceRecipient, curFillPercent, {value: nativeTokenAmount.toString()});
+          await settlement.connect(executor).settle(
+              jamOrder, signature, interactions, hooks, solverData, {value: nativeTokenAmount.toString()}
+          );
         } else {
-          await settlement.connect(executor).settleWithTakerPermits(jamOrder, signature, takerPermitsInfo, interactions, hooks, balanceRecipient, curFillPercent, {value: nativeTokenAmount.toString()});
+          await settlement.connect(executor).settleWithTakerPermits(
+              jamOrder, signature, takerPermitsInfo, interactions, hooks, solverData, {value: nativeTokenAmount.toString()}
+          );
         }
     }
 
