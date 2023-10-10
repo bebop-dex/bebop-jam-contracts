@@ -8,14 +8,14 @@ import {
   JamInteraction,
   JamOrder,
   JamSettlement
-} from "../typechain-types/artifacts/src/JamSettlement";
-import {BebopSettlement} from "../typechain-types";
+} from "../../typechain-types/artifacts/src/JamSettlement";
+import {BebopSettlement} from "../../typechain-types";
 import {BINANCE_ADDRESS, PERMIT2_ADDRESS, TOKENS} from "./config";
 import {approveTokens, getBalancesBefore, signJamOrder, verifyBalancesAfter} from "./utils/utils";
 import {Commands, getOrder} from "./utils/orders";
 import {getBebopSolverCalls} from "./bebop/bebop-utils";
 import {HooksGenerator} from "./hooks/hooksGenerator";
-import {Signature} from "../typechain-types/test/bebop/BebopSettlement";
+import {Signature} from "../../typechain-types/test/bebop/BebopSettlement";
 import {signPermit, signPermit2} from "./utils/permits";
 
 

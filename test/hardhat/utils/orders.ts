@@ -1,4 +1,4 @@
-import {JamOrder} from "../../typechain-types/artifacts/src/JamSettlement";
+import {JamOrder} from "../../../typechain-types/artifacts/src/JamSettlement";
 import {NFTS_ERC1155, NFTS_ERC721, TOKENS} from "../config";
 import {ethers} from "hardhat";
 

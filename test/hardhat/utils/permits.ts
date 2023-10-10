@@ -3,7 +3,7 @@ import {AllowanceTransfer, MaxUint160, MaxUint256} from "@uniswap/permit2-sdk";
 import {Contract, ethers, Signer} from "ethers";
 import Permit2 from "../hooks/abi/Permit2.json";
 import {TypedDataSigner} from "@ethersproject/abstract-signer/src.ts";
-import {Signature} from "../../typechain-types/test/bebop/BebopSettlement";
+import {Signature} from "../../../typechain-types/test/bebop/BebopSettlement";
 import {PERMIT2_ADDRESS} from "../config";
 import {Eip2612PermitUtils, ProviderConnector} from "@1inch/permit-signed-approvals-utils";
 import {UserConnector} from "../hooks/connector";

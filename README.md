@@ -5,43 +5,37 @@
 ![Github Actions](https://github.com/bebop-dex/bebop-jam-contracts/workflows/test/badge.svg)
 
 
-### Getting Started
+JAM (Just-in-Time Aggregation Model) is Bebop's upcoming DeFi liquidity aggregator system allowing any token to any token swaps with highly efficient execution quality.
 
- * Use Foundry: 
+JAM Solvers are independently run services that provide quotes to Bebop users on an RFQ (Request for Quote) basis. They are responsible for providing accurate prices and reliably executing swaps for the given quotes.
+
+
+From  a  systems  perspective,  how  the  trade  is conducted can be defined as follows:
+
+1.Bebop  JAM  orchestrator  receives  an  order request in the form: Buy  1000  Token  A  -  Sell  Token  B  - Slippage: 0. The requests support orders for    multiple    tokens    being    exchanged simultaneously.
+
+2.It queries solvers for a solution to the trade; the best solution is returned to the user.
+
+3.The user signs and therefore confirms their trade, producing a signature over the winning solver’s solution.
+
+4.This signature is returned to the orchestrator.
+
+5.The orchestrator passes the user’s signature to the winning solver for them to execute on-chain.
+
+6.The  solver  returns  the  transaction  to  the orchestrator and eventually the user.
+
+### Tests
+
+*  Hardhat tests:
 ```bash
-forge install
+yarn
+hardhat test
+```
+
+ *  Foundry tests(WIP): 
+```bash
 forge test
 ```
-
- * Use Hardhat:
-```bash
-npm install
-npx hardhat test
-```
-
-### Features
-
- * Write / run tests with either Hardhat or Foundry:
-```bash
-forge test
-# or
-npx hardhat test
-```
-
- * Use Hardhat's task framework
-```bash
-npx hardhat example
-```
-
- * Install libraries with Foundry which work with Hardhat.
-```bash
-forge install rari-capital/solmate # Already in this repo, just an example
-```
-
-### Notes
-
-Whenever you install new libraries using Foundry, make sure to update your `remappings.txt` file by running `forge remappings > remappings.txt`. This is required because we use `hardhat-preprocessor` and the `remappings.txt` file to allow Hardhat to resolve libraries you install with Foundry.
-
 
 ### Slither + Slitherin (extra detectors)
 

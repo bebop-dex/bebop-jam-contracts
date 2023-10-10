@@ -11,6 +11,8 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 
+/// @title JamSolver
+/// @notice This is an example of solver used for tests only
 contract JamSolver is ERC721Holder, ERC1155Holder{
     using SafeERC20 for IERC20;
     address public owner;

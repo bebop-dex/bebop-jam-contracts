@@ -1,11 +1,11 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {JamOrder, JamSettlement, Signature} from "../../typechain-types/artifacts/src/JamSettlement";
+import {JamOrder, JamSettlement, Signature} from "../../../typechain-types/artifacts/src/JamSettlement";
 import {BigNumber, BigNumberish} from "ethers";
 import {Commands} from "./orders";
 import {ethers} from "hardhat";
 import {expect} from "chai";
 import {NFTS_ERC1155, PERMIT2_ADDRESS} from "../config";
-import {token} from "../../typechain-types/artifacts/lib/openzeppelin-contracts/contracts";
+import {token} from "../../../typechain-types/artifacts/lib/openzeppelin-contracts/contracts";
 
 const JAM_ORDER_TYPES = {
     "JamOrder": [

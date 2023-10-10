@@ -1,6 +1,6 @@
-import {JamInteraction} from "../../typechain-types/artifacts/src/JamSettlement";
-import {JamOrder} from "../../typechain-types/artifacts/src/JamSigning";
-import {BebopSettlement} from "../../typechain-types";
+import {JamInteraction} from "../../../typechain-types/artifacts/src/JamSettlement";
+import {JamOrder} from "../../../typechain-types/artifacts/src/JamSigning";
+import {BebopSettlement} from "../../../typechain-types";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers, network} from "hardhat";
 import {BigNumber} from "ethers";
