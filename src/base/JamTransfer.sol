@@ -23,23 +23,26 @@ abstract contract JamTransfer {
     /// @param receiver address
     function transferTokensFromContract(
         address[] calldata tokens,
-        uint256[] calldata amounts,
+        uint256[] memory amounts,
         uint256[] calldata nftIds,
         bytes calldata tokenTransferTypes,
         address receiver,
-        uint16 fillPercent
+        uint16 fillPercent,
+        bool transferExactAmounts
     ) internal {
         uint nftInd;
         for (uint i; i < tokens.length; ++i) {
             if (tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER) {
                 uint tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
-                require(tokenBalance >= BMath.getPercentage(amounts[i], fillPercent), "INVALID_OUTPUT_TOKEN_BALANCE");
-                IERC20(tokens[i]).safeTransfer(receiver, tokenBalance);
+                uint partialFillAmount = BMath.getPercentage(amounts[i], fillPercent);
+                require(tokenBalance >= partialFillAmount, "INVALID_OUTPUT_TOKEN_BALANCE");
+                IERC20(tokens[i]).safeTransfer(receiver, transferExactAmounts ? partialFillAmount : tokenBalance);
             } else if (tokenTransferTypes[i] == Commands.NATIVE_TRANSFER){
                 require(tokens[i] == JamOrder.NATIVE_TOKEN, "INVALID_NATIVE_TOKEN");
                 uint tokenBalance = address(this).balance;
-                require(tokenBalance >= BMath.getPercentage(amounts[i], fillPercent), "INVALID_OUTPUT_NATIVE_BALANCE");
-                (bool sent, ) = payable(receiver).call{value: tokenBalance}("");
+                uint partialFillAmount = BMath.getPercentage(amounts[i], fillPercent);
+                require(tokenBalance >= partialFillAmount, "INVALID_OUTPUT_NATIVE_BALANCE");
+                (bool sent, ) = payable(receiver).call{value: transferExactAmounts ?  partialFillAmount : tokenBalance}("");
                 require(sent, "FAILED_TO_SEND_ETH");
             } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
                 uint tokenBalance = IERC721(tokens[i]).balanceOf(address(this));
@@ -48,7 +51,9 @@ abstract contract JamTransfer {
             } else if (tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
                 uint tokenBalance = IERC1155(tokens[i]).balanceOf(address(this), nftIds[nftInd]);
                 require(tokenBalance >= amounts[i], "INVALID_OUTPUT_ERC1155_BALANCE");
-                IERC1155(tokens[i]).safeTransferFrom(address(this), receiver, nftIds[nftInd++], tokenBalance, "");
+                IERC1155(tokens[i]).safeTransferFrom(
+                    address(this), receiver, nftIds[nftInd++], transferExactAmounts ?  amounts[i] : tokenBalance, ""
+                );
             } else {
                 revert("INVALID_TRANSFER_TYPE");
             }
@@ -63,66 +68,83 @@ abstract contract JamTransfer {
         require(sent, "FAILED_TO_SEND_ETH");
     }
 
-
-    /// @dev Verify balances of tokens after main interactions
-    /// @param tokens Buy tokens' addresses
-    /// @param amounts Buy tokens' amounts
-    /// @param initialAmounts initial buy tokens' amounts
-    /// @param nftIds NFTs' ids
-    /// @param tokenTransferTypes command sequence of transfer types
-    /// @param receiver address
-    function verifyBalances(
-        address[] calldata tokens,
-        uint256[] calldata amounts,
-        uint256[] memory initialAmounts,
-        uint256[] calldata nftIds,
-        bytes calldata tokenTransferTypes,
-        address receiver
-    ) internal {
-        uint nftInd;
-        for (uint i; i < tokens.length; ++i) {
-            if (tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER) {
-                uint tokenBalance = IERC20(tokens[i]).balanceOf(receiver);
-                require(tokenBalance - initialAmounts[i] >= amounts[i], "INVALID_OUTPUT_TOKEN_BALANCE");
-            } else if (tokenTransferTypes[i] == Commands.NATIVE_TRANSFER){
-                uint tokenBalance = receiver.balance;
-                require(tokenBalance - initialAmounts[i] >= amounts[i], "INVALID_OUTPUT_NATIVE_BALANCE");
-            } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
-                require(IERC721(tokens[i]).ownerOf(nftIds[nftInd++]) == receiver, "INVALID_ERC721_RECEIVER");
-            } else if (tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
-                uint tokenBalance = IERC1155(tokens[i]).balanceOf(receiver, nftIds[nftInd++]);
-                require(tokenBalance - initialAmounts[i] >= amounts[i], "INVALID_OUTPUT_ERC1155_BALANCE");
+    /// @dev Calculate new amounts of tokens if solver transferred excess to contract during settleBatch
+    /// @param curInd index of current order
+    /// @param orders array of orders
+    /// @param fillPercents[] fill percentage
+    /// @return array of new amounts
+    function calculateNewAmounts(
+        uint256 curInd,
+        JamOrder.Data[] calldata orders,
+        uint16[] memory fillPercents
+    ) internal returns (uint256[] memory) {
+        JamOrder.Data calldata curOrder = orders[curInd];
+        uint256[] memory newAmounts = new uint256[](curOrder.buyTokens.length);
+        uint16 curFillPercent = fillPercents.length == 0 ? 10000 : fillPercents[curInd];
+        for (uint i; i < curOrder.buyTokens.length; ++i) {
+            if (curOrder.buyTokenTransfers[i] == Commands.SIMPLE_TRANSFER || curOrder.buyTokenTransfers[i] == Commands.NATIVE_TRANSFER) {
+                uint256 fullAmount;
+                for (uint j = curInd; j < orders.length; ++j) {
+                    for (uint k; k < orders[j].buyTokens.length; ++k) {
+                        if (orders[j].buyTokens[k] == curOrder.buyTokens[i]) {
+                            fullAmount += orders[j].buyAmounts[k];
+                            require(fillPercents.length == 0 || curFillPercent == fillPercents[j], "DIFF_FILL_PERCENT_FOR_SAME_TOKEN");
+                        }
+                    }
+                }
+                uint256 tokenBalance = curOrder.buyTokenTransfers[i] == Commands.NATIVE_TRANSFER ?
+                    address(this).balance : IERC20(curOrder.buyTokens[i]).balanceOf(address(this));
+                if (fullAmount == curOrder.buyAmounts[i] && tokenBalance >= curOrder.buyAmounts[i]) {
+                    newAmounts[i] = tokenBalance;
+                } else {
+                    // if at least two takers buy same token, we need to divide the whole tokenBalance among them.
+                    // for edge case with newAmounts[i] overflow, solver should submit tx with transferExactAmounts=true
+                    newAmounts[i] = BMath.getInvertedPercentage(tokenBalance * curOrder.buyAmounts[i] / fullAmount, curFillPercent);
+                    if (newAmounts[i] < curOrder.buyAmounts[i]) {
+                        newAmounts[i] = curOrder.buyAmounts[i];
+                    }
+                }
             } else {
-                revert("INVALID_TRANSFER_TYPE");
+                newAmounts[i] = curOrder.buyAmounts[i];
             }
         }
+        return newAmounts;
     }
 
-    /// @dev Get initial balances of tokens before main interactions
-    /// @param tokens Buy tokens' addresses
+
+    /// @dev Check if there are duplicate tokens
+    /// @param tokens tokens' addresses
     /// @param nftIds NFTs' ids
     /// @param tokenTransferTypes command sequence of transfer types
-    /// @param receiver address
-    function getInitialBalances(
-        address[] calldata tokens,
-        uint256[] calldata nftIds,
-        bytes calldata tokenTransferTypes,
-        address receiver
-    ) internal returns (uint256[] memory){
-        uint256[] memory initialBalances = new uint256[](tokens.length);
-        uint nftInd;
-        for (uint i; i < tokens.length; ++i) {
-            if (tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER) {
-                initialBalances[i] = IERC20(tokens[i]).balanceOf(receiver);
-            } else if (tokenTransferTypes[i] == Commands.NATIVE_TRANSFER){
-                require(tokens[i] == JamOrder.NATIVE_TOKEN, "INVALID_OUTPUT_TOKEN");
-                initialBalances[i] = receiver.balance;
-            } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
-                ++nftInd;
-            } else if (tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
-                initialBalances[i] = IERC1155(tokens[i]).balanceOf(receiver, nftIds[nftInd++]);
+    /// @return true if there are duplicate tokens
+    function hasDuplicate(
+        address[] calldata tokens, uint256[] calldata nftIds, bytes calldata tokenTransferTypes
+    ) internal pure returns (bool) {
+        if (tokens.length == 0) {
+            return false;
+        }
+        uint curNftInd;
+        for (uint i; i < tokens.length - 1; ++i) {
+            uint tmpNftInd = curNftInd;
+            for (uint j = i + 1; j < tokens.length; ++j) {
+                if (tokenTransferTypes[j] == Commands.NFT_ERC721_TRANSFER || tokenTransferTypes[j] == Commands.NFT_ERC1155_TRANSFER){
+                    ++tmpNftInd;
+                }
+                if (tokens[i] == tokens[j]) {
+                    if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER ||
+                        tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER){
+                        if (nftIds[curNftInd] == nftIds[tmpNftInd]){
+                            return true;
+                        }
+                    } else {
+                        return true;
+                    }
+                }
+            }
+            if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER || tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER){
+                ++curNftInd;
             }
         }
-        return initialBalances;
+        return false;
     }
 }

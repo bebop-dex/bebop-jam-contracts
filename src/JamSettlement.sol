@@ -63,7 +63,7 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
     }
 
     /// @inheritdoc IJamSettlement
-    function settleWithTakerPermits(
+    function settleWithPermitsSignatures(
         JamOrder.Data calldata order,
         Signature.TypedSignature calldata signature,
         Signature.TakerPermitsInfo calldata takerPermitsInfo,
@@ -101,7 +101,7 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
     }
 
     /// @inheritdoc IJamSettlement
-    function settleInternalWithTakerPermits(
+    function settleInternalWithPermitsSignatures(
         JamOrder.Data calldata order,
         Signature.TypedSignature calldata signature,
         Signature.TakerPermitsInfo calldata takerPermitsInfo,
@@ -119,26 +119,70 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
         _settleInternal(order, hooks, makerData);
     }
 
+    /// @inheritdoc IJamSettlement
+    function settleBatch(
+        JamOrder.Data[] calldata orders,
+        Signature.TypedSignature[] calldata signatures,
+        Signature.TakerPermitsInfo[] calldata takersPermitsInfo,
+        JamInteraction.Data[] calldata interactions,
+        JamHooks.Def[] calldata hooks,
+        ExecInfo.BatchSolverData calldata solverData
+    ) external payable nonReentrant {
+        validateBatchOrders(orders, hooks, signatures, takersPermitsInfo, solverData.takersPermitsUsage, solverData.curFillPercents);
+        bool isMaxFill = solverData.curFillPercents.length == 0;
+        bool executeHooks = hooks.length != 0;
+        uint takersPermitsInd;
+        for (uint i; i < orders.length; ++i) {
+            if (executeHooks){
+                require(runInteractions(hooks[i].beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
+            }
+            if (solverData.takersPermitsUsage.length != 0 && solverData.takersPermitsUsage[i]){
+                balanceManager.transferTokensWithPermits(
+                    IJamBalanceManager.TransferData(
+                        orders[i].taker, solverData.balanceRecipient, orders[i].sellTokens, orders[i].sellAmounts,
+                        orders[i].sellNFTIds, orders[i].sellTokenTransfers, isMaxFill ? 10000 : solverData.curFillPercents[i]
+                    ), takersPermitsInfo[takersPermitsInd++]
+                );
+            } else {
+                balanceManager.transferTokens(
+                    IJamBalanceManager.TransferData(
+                        orders[i].taker, solverData.balanceRecipient, orders[i].sellTokens, orders[i].sellAmounts,
+                        orders[i].sellNFTIds, orders[i].sellTokenTransfers, isMaxFill ? 10000 : solverData.curFillPercents[i]
+                    )
+                );
+            }
+        }
+        require(runInteractions(interactions), "INTERACTIONS_FAILED");
+        for (uint i; i < orders.length; ++i) {
+            uint256[] memory curBuyAmounts = solverData.transferExactAmounts ?
+                orders[i].buyAmounts : calculateNewAmounts(i, orders, solverData.curFillPercents);
+            transferTokensFromContract(
+                orders[i].buyTokens, curBuyAmounts, orders[i].buyNFTIds, orders[i].buyTokenTransfers,
+                orders[i].receiver, isMaxFill ? 10000 : solverData.curFillPercents[i], true
+            );
+            if (executeHooks){
+                require(runInteractions(hooks[i].afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
+            }
+            emit Settlement(orders[i].nonce);
+        }
+    }
+
     function _settle(
         JamOrder.Data calldata order,
         JamInteraction.Data[] calldata interactions,
         JamHooks.Def calldata hooks,
         uint16 curFillPercent
     ) private {
+        require(runInteractions(interactions), "INTERACTIONS_FAILED");
+        transferTokensFromContract(
+            order.buyTokens, order.buyAmounts, order.buyNFTIds, order.buyTokenTransfers, order.receiver, curFillPercent, false
+        );
         if (order.receiver == address(this)){
-            uint256[] memory initialReceiverBalances = getInitialBalances(
-                order.buyTokens,order.buyNFTIds, order.buyTokenTransfers, order.receiver
-            );
-            require(runInteractions(interactions), "INTERACTIONS_FAILED");
-            verifyBalances(
-                order.buyTokens, order.buyAmounts, initialReceiverBalances, order.buyNFTIds, order.buyTokenTransfers, order.receiver
-            );
+            require(!hasDuplicate(order.buyTokens, order.buyNFTIds, order.buyTokenTransfers), "DUPLICATE_TOKENS");
             require(hooks.afterSettle.length > 0, "AFTER_SETTLE_HOOKS_REQUIRED");
-        } else {
-            require(runInteractions(interactions), "INTERACTIONS_FAILED");
-            transferTokensFromContract(
-                order.buyTokens, order.buyAmounts, order.buyNFTIds, order.buyTokenTransfers, order.receiver, curFillPercent
-            );
+            for (uint i; i < hooks.afterSettle.length; ++i){
+                require(hooks.afterSettle[i].result, "POTENTIAL_TOKENS_LOSS");
+            }
         }
         require(runInteractions(hooks.afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
         emit Settlement(order.nonce);

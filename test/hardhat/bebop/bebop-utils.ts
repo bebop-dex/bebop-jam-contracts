@@ -1,10 +1,9 @@
-import {JamInteraction} from "../../../typechain-types/artifacts/src/JamSettlement";
-import {JamOrder} from "../../../typechain-types/artifacts/src/JamSigning";
-import {BebopSettlement} from "../../../typechain-types";
+import {JamInteraction, JamOrder} from "../../../typechain-types/artifacts/src/JamSettlement";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers, network} from "hardhat";
 import {BigNumber} from "ethers";
 import {TOKENS} from "../config";
+import {BebopSettlement} from "../../../typechain-types";
 
 
 const PARTIAL_ORDER_TYPES = {
@@ -28,7 +27,7 @@ export async function getBebopSolverCalls(
     takerAddress: string,
     maker: SignerWithAddress,
     curFillPercent: number = 10000
-){
+): Promise<JamInteraction.DataStruct[]> {
     const maker_nonce = Math.floor(Math.random() * 1000000);
     const taker_address = takerAddress;
     const receiver = takerAddress;

@@ -28,7 +28,7 @@ From  a  systems  perspective,  how  the  trade  is conducted can be defined as 
 
 ### Order
 The smart contract is used for both regular trades and limit orders. The only difference between a limit order and a regular one is that order.expiry will be infinite in limit orders. \
-A trade can be absolutely any combination of ERC20/ERC721/ERC1155 in any quantity, for example: \
+A trade can be absolutely any combination of NATIVE/ERC20/ERC721/ERC1155 in any quantity, for example: \
 USDT <-> WETH \
 USDT + USDC <-> WETH \
 USDT <->  USDC + WETH + WBTC \
@@ -68,8 +68,8 @@ library Commands {
 ```
 
 ### Settlement
-Solvers/Makers have two options how to execute trade:
-* `settle` (or `settleWithTakerPermits` if quote has approval_type=permits)
+Solvers/Makers have three options how to execute trade:
+1) `settle` (or `settleWithPermitsSignatures` if quote has approval_type=permits)
 ```solidity
 function settle(
     JamOrder.Data calldata order,
@@ -85,7 +85,7 @@ function settle(
 `JamHooks.Def hooks` - pre and post interactions specified by taker (for example swap + bridge) (passed to the solver via API) \
 `ExecInfo.SolverData solverData` - solver's extra information about execution
 
-* `settleInternal` (or `settleInternalWithTakerPermits` if quote has approval_type=permits)
+2) `settleInternal` (or `settleInternalWithPermitsSignatures` if quote has approval_type=permits)
 ```solidity
 function settleInternal(
     JamOrder.Data calldata order,
@@ -96,11 +96,24 @@ function settleInternal(
 ```
 This approach is cheaper in gas and may be suitable for makers who provide liquidity directly. 
 
+3) `settleBatch` - solver can submit batch of orders if it wins them around the same time
+```solidity
+function settleBatch(
+    JamOrder.Data[] calldata orders,
+    Signature.TypedSignature[] calldata signatures,
+    Signature.TakerPermitsInfo[] calldata takersPermitsInfo,
+    JamInteraction.Data[] calldata interactions,
+    JamHooks.Def[] calldata hooks,
+    ExecInfo.BatchSolverData calldata solverData
+)
+```
+
 ### Tests
 
 *  Hardhat tests:
 ```bash
-yarn
+npm install
+hardhat compile
 hardhat test
 ```
 

@@ -54,4 +54,17 @@ contract SignatureTests is Test, Utils {
 
         jam.validateSignature(maker, message, sig);
     }
+
+    function testEIP712InvalidSignature() public {
+        (address signer, uint256 signingKey) = makeAddrAndKey("someSigner");
+
+        bytes32 message = keccak256("Order Hash");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signingKey, message);
+        bytes memory rsv_sig = abi.encodePacked(r, s, v);
+        Signature.TypedSignature memory sig = Signature.TypedSignature(Signature.Type.EIP712, rsv_sig);
+
+        vm.expectRevert("Invalid EIP712 order signature");
+        jam.validateSignature(makeAddr("anotherSigner"), message, sig);
+    }
+
 }

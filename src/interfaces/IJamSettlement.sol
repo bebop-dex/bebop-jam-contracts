@@ -17,6 +17,7 @@ interface IJamSettlement {
     /// @param order user signed order
     /// @param signature user signature
     /// @param interactions list of interactions to settle the order
+    /// @param hooks pre and post interactions
     /// @param solverData solver specifies this data by itself
     function settle(
         JamOrder.Data calldata order,
@@ -26,14 +27,15 @@ interface IJamSettlement {
         ExecInfo.SolverData calldata solverData
     ) external payable;
 
-    /// @dev Settle a jam order using taker's Permit/Permit2.
+    /// @dev Settle a jam order using taker's Permit/Permit2 signatures
     /// Pulls sell tokens into the contract and ensures that after running interactions receiver has the minimum of buy
     /// @param order user signed order
     /// @param signature user signature
+    /// @param takerPermitsInfo taker information about permit and permit2
     /// @param interactions list of interactions to settle the order
     /// @param hooks pre and post interactions
     /// @param solverData solver specifies this data by itself
-    function settleWithTakerPermits(
+    function settleWithPermitsSignatures(
         JamOrder.Data calldata order,
         Signature.TypedSignature calldata signature,
         Signature.TakerPermitsInfo calldata takerPermitsInfo,
@@ -55,17 +57,35 @@ interface IJamSettlement {
         ExecInfo.MakerData calldata makerData
     ) external payable;
 
-    /// @dev Settle a jam order using taker's Permit/Permit2.
+    /// @dev Settle a jam order using taker's Permit/Permit2 signatures
     /// Pulls sell tokens into the contract and ensures that after running interactions receiver has the minimum of buy
     /// @param order user signed order
     /// @param signature user signature
+    /// @param takerPermitsInfo taker information about permit and permit2
     /// @param hooks pre and post interactions
     /// @param makerData maker specifies this data by itself
-    function settleInternalWithTakerPermits(
+    function settleInternalWithPermitsSignatures(
         JamOrder.Data calldata order,
         Signature.TypedSignature calldata signature,
         Signature.TakerPermitsInfo calldata takerPermitsInfo,
         JamHooks.Def calldata hooks,
         ExecInfo.MakerData calldata makerData
+    ) external payable;
+
+    /// @dev Settle a batch of orders.
+    /// Pulls sell tokens into the contract and ensures that after running interactions receivers have the minimum of buy
+    /// @param orders takers signed orders
+    /// @param signatures takers signatures
+    /// @param takersPermitsInfo takers information about permit and permit2
+    /// @param interactions list of interactions to settle the order
+    /// @param hooks pre and post takers interactions
+    /// @param solverData solver specifies this data by itself
+    function settleBatch(
+        JamOrder.Data[] calldata orders,
+        Signature.TypedSignature[] calldata signatures,
+        Signature.TakerPermitsInfo[] calldata takersPermitsInfo,
+        JamInteraction.Data[] calldata interactions,
+        JamHooks.Def[] calldata hooks,
+        ExecInfo.BatchSolverData calldata solverData
     ) external payable;
 }

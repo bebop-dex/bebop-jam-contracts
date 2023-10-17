@@ -8,4 +8,12 @@ library BMath {
         }
         return value * percent / 10000;
     }
+
+    function getInvertedPercentage(uint256 value, uint16 percent) internal view returns (uint256){
+        if (percent >= 10000){
+            return value;
+        }
+        return value * 10000 / percent;
+    }
+
 }

@@ -24,7 +24,7 @@ task("deploySolver", "Deploy Solver").addParam('settlement', 'Jam Settlement Con
 const config: HardhatUserConfig = {
   typechain: {
     externalArtifacts: [
-        "./test/bebop/BebopSettlement.json"
+        "./test/hardhat/bebop/BebopSettlement.json"
     ]
   },
   solidity: {

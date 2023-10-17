@@ -23,7 +23,7 @@ abstract contract JamSigning {
     ));
 
     bytes32 public constant JAM_ORDER_TYPE_HASH = keccak256(abi.encodePacked(
-        "JamOrder(address taker,address receiver,uint256 expiry,uint256 nonce,uint16 minFillPercent,bytes32 hooksHash,address[] sellTokens,address[] buyTokens,uint256[] sellAmounts,uint256[] buyAmounts,uint256[] sellNFTIds,uint256[] buyNFTIds,bytes sellTokenTransfers,bytes buyTokenTransfers)"
+        "JamOrder(address taker,address receiver,uint256 expiry,uint256 nonce,address executor,uint16 minFillPercent,bytes32 hooksHash,address[] sellTokens,address[] buyTokens,uint256[] sellAmounts,uint256[] buyAmounts,uint256[] sellNFTIds,uint256[] buyNFTIds,bytes sellTokenTransfers,bytes buyTokenTransfers)"
     ));
 
     bytes32 private immutable _CACHED_DOMAIN_SEPARATOR;
@@ -49,7 +49,7 @@ abstract contract JamSigning {
     /// @notice Hash beforeSettle and afterSettle interactions
     /// @param hooks pre and post interactions to hash
     /// @return The hash of the interactions
-    function hashHooks(JamHooks.Def calldata hooks) public pure returns (bytes32) {
+    function hashHooks(JamHooks.Def memory hooks) public view returns (bytes32) {
         if (hooks.afterSettle.length == 0 && hooks.beforeSettle.length == 0){
             return bytes32(0);
         }
@@ -70,6 +70,7 @@ abstract contract JamSigning {
                     order.receiver,
                     order.expiry,
                     order.nonce,
+                    order.executor,
                     order.minFillPercent,
                     hooksHash
                 ),
@@ -135,14 +136,15 @@ abstract contract JamSigning {
     /// @param signature The signature to check against
     /// @param curFillPercent Solver/Maker fill percent
     function validateOrder(
-        JamOrder.Data calldata order, JamHooks.Def calldata hooks, Signature.TypedSignature calldata signature, uint16 curFillPercent
-    ) public {
+        JamOrder.Data calldata order, JamHooks.Def memory hooks, Signature.TypedSignature calldata signature, uint16 curFillPercent
+    ) internal {
         // Allow settle from user without sig
         if (order.taker != msg.sender) {
             bytes32 hooksHash = hashHooks(hooks);
             bytes32 orderHash = hashOrder(order, hooksHash);
             validateSignature(order.taker, orderHash, signature);
         }
+        require(order.executor == msg.sender || order.executor == address(0), "INVALID_EXECUTOR");
         require(order.buyTokens.length == order.buyAmounts.length, "INVALID_BUY_TOKENS_LENGTH");
         require(order.buyTokens.length == order.buyTokenTransfers.length, "INVALID_BUY_TRANSFERS_LENGTH");
         require(order.sellTokens.length == order.sellAmounts.length, "INVALID_SELL_TOKENS_LENGTH");
@@ -152,11 +154,23 @@ abstract contract JamSigning {
         require(block.timestamp < order.expiry, "ORDER_EXPIRED");
     }
 
-    function cancelLimitOrder(uint256 nonce) external {
+    /// @notice Cancel order by invalidating nonce for the sender address
+    /// @param nonce The nonce to invalidate
+    function cancelOrder(uint256 nonce) external {
         invalidateOrderNonce(msg.sender, nonce);
     }
 
+    /// @notice Check if taker's nonce is valid
+    /// @param taker address
+    /// @param nonce to check
+    /// @return True if nonce is valid
+    function isNonceValid(address taker, uint256 nonce) external view returns (bool) {
+        uint256 invalidatorSlot = nonce >> 8;
+        return takerInvalidNonces[taker][invalidatorSlot] == 0;
+    }
+
     /// @notice Check if nonce is valid and invalidate it
+    /// @param taker address
     /// @param nonce The nonce to invalidate
     function invalidateOrderNonce(address taker, uint256 nonce) private {
         require(nonce != 0, "ZERO_NONCE");
@@ -183,5 +197,35 @@ abstract contract JamSigning {
             require(increasedAmounts[i] >= initialAmounts[i], "INVALID_INCREASED_AMOUNTS");
         }
         return increasedAmounts;
+    }
+
+    /// @notice validate all information about the batch of orders
+    /// @param orders to validate
+    /// @param hooks All takers hooks to validate
+    /// @param signatures All takers signatures to check against
+    /// @param curFillPercents Partial fill percent for each order
+    function validateBatchOrders(
+        JamOrder.Data[] calldata orders, JamHooks.Def[] calldata hooks, Signature.TypedSignature[] calldata signatures,
+        Signature.TakerPermitsInfo[] calldata takersPermitsInfo, bool[] calldata takersPermitsUsage, uint16[] calldata curFillPercents
+    ) internal {
+        bool isMaxFill = curFillPercents.length == 0;
+        bool noHooks = hooks.length == 0;
+        bool allTakersWithoutPermits = takersPermitsUsage.length == 0;
+        require(orders.length == signatures.length, "INVALID_SIGNATURES_LENGTH");
+        require(orders.length == takersPermitsUsage.length || allTakersWithoutPermits, "INVALID_TAKERS_PERMITS_USAGE_LENGTH");
+        require(orders.length == hooks.length || noHooks, "INVALID_HOOKS_LENGTH");
+        require(orders.length == curFillPercents.length || isMaxFill, "INVALID_FILL_PERCENTS_LENGTH");
+        uint takersWithPermits;
+        for (uint i; i < orders.length; ++i) {
+            require(orders[i].receiver != address(this), "INVALID_RECEIVER_FOR_BATCH_SETTLE");
+            validateOrder(
+                orders[i], noHooks ? JamHooks.Def(new JamInteraction.Data[](0), new JamInteraction.Data[](0)) : hooks[i],
+                signatures[i], isMaxFill ? 10000 : curFillPercents[i]
+            );
+            if (!allTakersWithoutPermits && takersPermitsUsage[i]){
+                ++takersWithPermits;
+            }
+        }
+        require(takersPermitsInfo.length == takersWithPermits, "INVALID_TAKERS_PERMITS_LENGTH");
     }
 }

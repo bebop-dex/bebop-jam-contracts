@@ -44,12 +44,25 @@ contract JamBalanceManager is IJamBalanceManager {
     function transferTokens(
         TransferData calldata data
     ) onlyOperator(msg.sender) external {
+        IPermit2.AllowanceTransferDetails[] memory batchTransferDetails;
         uint nftsInd;
+        uint batchLen;
         for (uint i; i < data.tokens.length; ++i) {
             if (data.tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER) {
                 IERC20(data.tokens[i]).safeTransferFrom(
                     data.from, data.receiver, BMath.getPercentage(data.amounts[i], data.fillPercent)
                 );
+            } else if (data.tokenTransferTypes[i] == Commands.PERMIT2_TRANSFER) {
+                if (batchLen == 0){
+                    batchTransferDetails = new IPermit2.AllowanceTransferDetails[](data.tokens.length - i);
+                }
+                batchTransferDetails[batchLen++] = IPermit2.AllowanceTransferDetails({
+                    from: data.from,
+                    to: data.receiver,
+                    amount: SafeCast160.toUint160(BMath.getPercentage(data.amounts[i], data.fillPercent)),
+                    token: data.tokens[i]
+                });
+                continue;
             } else if (data.tokenTransferTypes[i] == Commands.NATIVE_TRANSFER) {
                 require(data.tokens[i] == JamOrder.NATIVE_TOKEN, "INVALID_NATIVE_TOKEN_ADDRESS");
                 if (data.receiver != operator){
@@ -65,8 +78,16 @@ contract JamBalanceManager is IJamBalanceManager {
             } else {
                 revert("INVALID_TRANSFER_TYPE");
             }
+            if (batchLen != 0){
+                assembly {mstore(batchTransferDetails, sub(mload(batchTransferDetails), 1))}
+            }
         }
         require(nftsInd == data.nftIds.length, "INVALID_NFT_IDS_LENGTH");
+        require(batchLen == batchTransferDetails.length, "INVALID_BATCH_PERMIT2_LENGTH");
+
+        if (batchLen != 0){
+            PERMIT2.transferFrom(batchTransferDetails);
+        }
     }
 
     /// @inheritdoc IJamBalanceManager

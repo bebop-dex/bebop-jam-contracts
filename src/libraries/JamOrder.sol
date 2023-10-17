@@ -18,13 +18,14 @@ library JamOrder {
 
     address internal constant NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
-    /// @dev Data respresenting a Jam Order.
+    /// @dev Data representing a Jam Order.
     struct Data {
         address taker;
         address receiver;
         uint256 expiry;
         uint256 nonce;
-        uint16 minFillPercent;
+        address executor; // only msg.sender=executor is allowed to execute (if executor=address(0), then order can be executed by anyone)
+        uint16 minFillPercent; // 100% = 10000, if taker allows partial fills, then it could be less than 100%
         bytes32 hooksHash; // keccak256(pre interactions + post interactions)
         address[] sellTokens;
         address[] buyTokens;

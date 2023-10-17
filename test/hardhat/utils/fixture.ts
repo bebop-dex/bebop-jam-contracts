@@ -42,7 +42,7 @@ async function getFunds(walletsWithFunds: SignerWithAddress[], solverAddr: strin
   const getReceiverAddress = (to: string) => {
     if (to === "solver") return solverAddr;
     if (to === "taker") return walletsWithFunds[0].address;
-    if (to === "maker") return walletsWithFunds[2].address;
+    if (to === "maker") return walletsWithFunds[3].address;
     return ""
   }
   await network.provider.request({
@@ -78,7 +78,7 @@ export async function getFixture () {
     ],
   });
 
-  const [deployer, solver, user, bebopMaker, directMaker, ...users] = await ethers.getSigners();
+  const [deployer, solver, user, anotherUser, bebopMaker, directMaker, ...users] = await ethers.getSigners();
 
   const JamSettlement = await ethers.getContractFactory("JamSettlement");
   const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS, TOKENS.DAI);
@@ -92,7 +92,7 @@ export async function getFixture () {
   const JamBalanceManager = await ethers.getContractFactory("JamBalanceManager");
   const balanceManager = await JamBalanceManager.attach(balanceManagerAddress);
 
-  let walletsWithFunds = [user, bebopMaker, directMaker, solver]
+  let walletsWithFunds = [user, anotherUser, bebopMaker, directMaker, solver]
   await getFunds(walletsWithFunds, solverContract.address)
   console.log("User", user.address)
   console.log("BebopMaker", bebopMaker.address)
@@ -106,6 +106,7 @@ export async function getFixture () {
     solver,
     solverContract,
     user,
+    anotherUser,
     bebopMaker,
     settlement,
     balanceManager,

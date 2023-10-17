@@ -31,6 +31,7 @@ const AMOUNTS = {
 export function getOrder(
     orderType: string,
     takerAddress: string,
+    executor: string,
     sellCommands: Commands[],
     buyCommands: Commands[],
     _minFillPercent: number | undefined = undefined,
@@ -44,6 +45,7 @@ export function getOrder(
         receiver: takerAddress,
         nonce: nonce,
         expiry,
+        executor: executor,
         hooksHash: "",
         buyTokenTransfers: "0x" + buyCommands.join(""),
         sellTokenTransfers: "0x" + sellCommands.join(""),
@@ -198,6 +200,17 @@ export function getOrder(
             sellTokens: [TOKENS.USDC],
             buyAmounts: [AMOUNTS.WETH_1, AMOUNTS.LINK_1, AMOUNTS.WBTC_1],
             sellAmounts: [AMOUNTS.USDC_1],
+            sellNFTIds: [],
+            buyNFTIds: []
+        }
+    }
+    if (orderType === "One-to-Many-another"){
+        return {
+            ...common,
+            buyTokens: [TOKENS.SNX, TOKENS.LINK, TOKENS.WBTC],
+            sellTokens: [TOKENS.DYDX],
+            buyAmounts: [AMOUNTS.SNX_1, AMOUNTS.LINK_1, AMOUNTS.WBTC_1],
+            sellAmounts: [AMOUNTS.DYDX_1],
             sellNFTIds: [],
             buyNFTIds: []
         }
