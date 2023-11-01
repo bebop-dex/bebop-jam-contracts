@@ -513,17 +513,17 @@ describe("JamSettlement", function () {
     )!
     let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
 
-    let isNonceValid = await fixture.settlement.isNonceValid(jamOrder.taker, jamOrder.nonce)
+    let isNonceValid = await fixture.settlement.isLimitOrderNonceValid(jamOrder.taker, jamOrder.nonce)
     if (!isNonceValid){
       throw Error("Nonce is not valid")
     }
     // user cancels this limit order
-    await fixture.settlement.connect(fixture.user).cancelOrder(jamOrder.nonce)
+    await fixture.settlement.connect(fixture.user).cancelLimitOrder(jamOrder.nonce)
     try {
       // should fail because this limit order was cancelled
       await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers)
     } catch (e){
-      isNonceValid = await fixture.settlement.isNonceValid(jamOrder.taker, jamOrder.nonce)
+      isNonceValid = await fixture.settlement.isLimitOrderNonceValid(jamOrder.taker, jamOrder.nonce)
       if (isNonceValid){
         throw Error("Nonce is still valid after canceling the order")
       }

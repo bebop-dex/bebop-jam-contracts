@@ -5,12 +5,15 @@ import "../libraries/JamInteraction.sol";
 import "../libraries/JamOrder.sol";
 import "../libraries/JamHooks.sol";
 import "../libraries/Signature.sol";
+import "../libraries/common/BMath.sol";
 import "@openzeppelin/contracts/interfaces/IERC1271.sol";
 
 /// @title JamSigning
 /// @notice Functions which handles the signing and validation of Jam orders
 abstract contract JamSigning {
-    mapping(address => mapping(uint256 => uint256)) private takerInvalidNonces;
+    mapping(address => mapping(uint256 => uint256)) private standardNonces;
+    mapping(address => mapping(uint256 => uint256)) private limitOrdersNonces;
+    uint256 private constant INF_EXPIRY = 9999999999; // expiry for limit orders
 
     bytes32 private constant DOMAIN_NAME = keccak256("JamSettlement");
     bytes32 private constant DOMAIN_VERSION = keccak256("1");
@@ -49,7 +52,7 @@ abstract contract JamSigning {
     /// @notice Hash beforeSettle and afterSettle interactions
     /// @param hooks pre and post interactions to hash
     /// @return The hash of the interactions
-    function hashHooks(JamHooks.Def memory hooks) public view returns (bytes32) {
+    function hashHooks(JamHooks.Def memory hooks) public pure returns (bytes32) {
         if (hooks.afterSettle.length == 0 && hooks.beforeSettle.length == 0){
             return bytes32(0);
         }
@@ -150,33 +153,35 @@ abstract contract JamSigning {
         require(order.sellTokens.length == order.sellAmounts.length, "INVALID_SELL_TOKENS_LENGTH");
         require(order.sellTokens.length == order.sellTokenTransfers.length, "INVALID_SELL_TRANSFERS_LENGTH");
         require(curFillPercent >= order.minFillPercent, "INVALID_FILL_PERCENT");
-        invalidateOrderNonce(order.taker, order.nonce);
+        invalidateOrderNonce(order.taker, order.nonce, order.expiry == INF_EXPIRY);
         require(block.timestamp < order.expiry, "ORDER_EXPIRED");
     }
 
-    /// @notice Cancel order by invalidating nonce for the sender address
+    /// @notice Cancel limit order by invalidating nonce for the sender address
     /// @param nonce The nonce to invalidate
-    function cancelOrder(uint256 nonce) external {
-        invalidateOrderNonce(msg.sender, nonce);
+    function cancelLimitOrder(uint256 nonce) external {
+        invalidateOrderNonce(msg.sender, nonce, true);
     }
 
-    /// @notice Check if taker's nonce is valid
+    /// @notice Check if taker's limit order nonce is valid
     /// @param taker address
     /// @param nonce to check
     /// @return True if nonce is valid
-    function isNonceValid(address taker, uint256 nonce) external view returns (bool) {
+    function isLimitOrderNonceValid(address taker, uint256 nonce) external view returns (bool) {
         uint256 invalidatorSlot = nonce >> 8;
-        return takerInvalidNonces[taker][invalidatorSlot] == 0;
+        uint256 invalidatorBit = 1 << (nonce & 0xff);
+        return (limitOrdersNonces[taker][invalidatorSlot] & invalidatorBit) == 0;
     }
 
     /// @notice Check if nonce is valid and invalidate it
     /// @param taker address
     /// @param nonce The nonce to invalidate
-    function invalidateOrderNonce(address taker, uint256 nonce) private {
+    /// @param isLimitOrder True if it is a limit order
+    function invalidateOrderNonce(address taker, uint256 nonce, bool isLimitOrder) private {
         require(nonce != 0, "ZERO_NONCE");
         uint256 invalidatorSlot = nonce >> 8;
         uint256 invalidatorBit = 1 << (nonce & 0xff);
-        mapping(uint256 => uint256) storage invalidNonces = takerInvalidNonces[taker];
+        mapping(uint256 => uint256) storage invalidNonces = isLimitOrder ? limitOrdersNonces[taker] : standardNonces[taker];
         uint256 invalidator = invalidNonces[invalidatorSlot];
         require(invalidator & invalidatorBit != invalidatorBit, "INVALID_NONCE");
         invalidNonces[invalidatorSlot] = invalidator | invalidatorBit;
@@ -220,7 +225,7 @@ abstract contract JamSigning {
             require(orders[i].receiver != address(this), "INVALID_RECEIVER_FOR_BATCH_SETTLE");
             validateOrder(
                 orders[i], noHooks ? JamHooks.Def(new JamInteraction.Data[](0), new JamInteraction.Data[](0)) : hooks[i],
-                signatures[i], isMaxFill ? 10000 : curFillPercents[i]
+                signatures[i], isMaxFill ? BMath.HUNDRED_PERCENT : curFillPercents[i]
             );
             if (!allTakersWithoutPermits && takersPermitsUsage[i]){
                 ++takersWithPermits;

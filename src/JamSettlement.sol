@@ -6,7 +6,6 @@ import "./base/JamSigning.sol";
 import "./base/JamTransfer.sol";
 import "./interfaces/IJamBalanceManager.sol";
 import "./interfaces/IJamSettlement.sol";
-import "./interfaces/IWETH.sol";
 import "./libraries/JamInteraction.sol";
 import "./libraries/JamOrder.sol";
 import "./libraries/JamHooks.sol";
@@ -147,7 +146,7 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
                 balanceManager.transferTokens(
                     IJamBalanceManager.TransferData(
                         orders[i].taker, solverData.balanceRecipient, orders[i].sellTokens, orders[i].sellAmounts,
-                        orders[i].sellNFTIds, orders[i].sellTokenTransfers, isMaxFill ? 10000 : solverData.curFillPercents[i]
+                        orders[i].sellNFTIds, orders[i].sellTokenTransfers, isMaxFill ? BMath.HUNDRED_PERCENT : solverData.curFillPercents[i]
                     )
                 );
             }
@@ -158,7 +157,7 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
                 orders[i].buyAmounts : calculateNewAmounts(i, orders, solverData.curFillPercents);
             transferTokensFromContract(
                 orders[i].buyTokens, curBuyAmounts, orders[i].buyNFTIds, orders[i].buyTokenTransfers,
-                orders[i].receiver, isMaxFill ? 10000 : solverData.curFillPercents[i], true
+                orders[i].receiver, isMaxFill ? BMath.HUNDRED_PERCENT : solverData.curFillPercents[i], true
             );
             if (executeHooks){
                 require(runInteractions(hooks[i].afterSettle), "AFTER_SETTLE_HOOKS_FAILED");

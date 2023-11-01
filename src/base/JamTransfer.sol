@@ -58,6 +58,7 @@ abstract contract JamTransfer {
                 revert("INVALID_TRANSFER_TYPE");
             }
         }
+        require(nftInd == nftIds.length, "INVALID_BUY_NFT_IDS_LENGTH");
     }
 
     /// @dev Transfer native tokens to receiver from this contract
@@ -80,7 +81,7 @@ abstract contract JamTransfer {
     ) internal returns (uint256[] memory) {
         JamOrder.Data calldata curOrder = orders[curInd];
         uint256[] memory newAmounts = new uint256[](curOrder.buyTokens.length);
-        uint16 curFillPercent = fillPercents.length == 0 ? 10000 : fillPercents[curInd];
+        uint16 curFillPercent = fillPercents.length == 0 ? BMath.HUNDRED_PERCENT : fillPercents[curInd];
         for (uint i; i < curOrder.buyTokens.length; ++i) {
             if (curOrder.buyTokenTransfers[i] == Commands.SIMPLE_TRANSFER || curOrder.buyTokenTransfers[i] == Commands.NATIVE_TRANSFER) {
                 uint256 fullAmount;
@@ -94,15 +95,11 @@ abstract contract JamTransfer {
                 }
                 uint256 tokenBalance = curOrder.buyTokenTransfers[i] == Commands.NATIVE_TRANSFER ?
                     address(this).balance : IERC20(curOrder.buyTokens[i]).balanceOf(address(this));
-                if (fullAmount == curOrder.buyAmounts[i] && tokenBalance >= curOrder.buyAmounts[i]) {
-                    newAmounts[i] = tokenBalance;
-                } else {
-                    // if at least two takers buy same token, we need to divide the whole tokenBalance among them.
-                    // for edge case with newAmounts[i] overflow, solver should submit tx with transferExactAmounts=true
-                    newAmounts[i] = BMath.getInvertedPercentage(tokenBalance * curOrder.buyAmounts[i] / fullAmount, curFillPercent);
-                    if (newAmounts[i] < curOrder.buyAmounts[i]) {
-                        newAmounts[i] = curOrder.buyAmounts[i];
-                    }
+                // if at least two takers buy same token, we need to divide the whole tokenBalance among them.
+                // for edge case with newAmounts[i] overflow, solver should submit tx with transferExactAmounts=true
+                newAmounts[i] = BMath.getInvertedPercentage(tokenBalance * curOrder.buyAmounts[i] / fullAmount, curFillPercent);
+                if (newAmounts[i] < curOrder.buyAmounts[i]) {
+                    newAmounts[i] = curOrder.buyAmounts[i];
                 }
             } else {
                 newAmounts[i] = curOrder.buyAmounts[i];

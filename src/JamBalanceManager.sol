@@ -180,7 +180,7 @@ contract JamBalanceManager is IJamBalanceManager {
     /// @param deadline timestamp when the signature expires
     /// @param permitSignature signature
     function permitToken(
-        address takerAddress, address tokenAddress, uint deadline, bytes memory permitSignature
+        address takerAddress, address tokenAddress, uint deadline, bytes calldata permitSignature
     ) private {
         (bytes32 r, bytes32 s, uint8 v) = Signature.getRsv(permitSignature);
 
