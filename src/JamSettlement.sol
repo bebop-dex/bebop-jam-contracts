@@ -139,7 +139,7 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransf
                 balanceManager.transferTokensWithPermits(
                     IJamBalanceManager.TransferData(
                         orders[i].taker, solverData.balanceRecipient, orders[i].sellTokens, orders[i].sellAmounts,
-                        orders[i].sellNFTIds, orders[i].sellTokenTransfers, isMaxFill ? 10000 : solverData.curFillPercents[i]
+                        orders[i].sellNFTIds, orders[i].sellTokenTransfers, isMaxFill ? BMath.HUNDRED_PERCENT : solverData.curFillPercents[i]
                     ), takersPermitsInfo[takersPermitsInd++]
                 );
             } else {

@@ -69,11 +69,15 @@ contract JamBalanceManager is IJamBalanceManager {
                     JamTransfer(operator).transferNativeFromContract(
                         data.receiver, BMath.getPercentage(data.amounts[i], data.fillPercent)
                     );
+                } else {
+                    require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
                 }
             } else if (data.tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
+                require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
                 require(data.amounts[i] == 1, "INVALID_ERC721_AMOUNT");
                 IERC721(data.tokens[i]).safeTransferFrom(data.from, data.receiver, data.nftIds[nftsInd++]);
             } else if (data.tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
+                require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
                 IERC1155(data.tokens[i]).safeTransferFrom(data.from, data.receiver, data.nftIds[nftsInd++], data.amounts[i], "");
             } else {
                 revert("INVALID_TRANSFER_TYPE");
@@ -135,11 +139,15 @@ contract JamBalanceManager is IJamBalanceManager {
                     JamTransfer(operator).transferNativeFromContract(
                         data.receiver, BMath.getPercentage(data.amounts[i], data.fillPercent)
                     );
+                } else {
+                    require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
                 }
             } else if (data.tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
+                require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
                 require(data.amounts[i] == 1, "INVALID_ERC721_AMOUNT");
                 IERC721(data.tokens[i]).safeTransferFrom(data.from, data.receiver, data.nftIds[indices.nftsInd++]);
             } else if (data.tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
+                require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
                 IERC1155(data.tokens[i]).safeTransferFrom(data.from, data.receiver, data.nftIds[indices.nftsInd++], data.amounts[i], "");
             } else {
                 revert("INVALID_TRANSFER_TYPE");
