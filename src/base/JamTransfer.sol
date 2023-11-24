@@ -13,6 +13,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 /// @notice Functions for transferring tokens from SettlementContract
 abstract contract JamTransfer {
 
+    event NativeTransfer(address indexed receiver, uint256 amount);
     using SafeERC20 for IERC20;
 
     /// @dev Transfer tokens from this contract to receiver
@@ -44,6 +45,7 @@ abstract contract JamTransfer {
                 require(tokenBalance >= partialFillAmount, "INVALID_OUTPUT_NATIVE_BALANCE");
                 (bool sent, ) = payable(receiver).call{value: transferExactAmounts ?  partialFillAmount : tokenBalance}("");
                 require(sent, "FAILED_TO_SEND_ETH");
+                emit NativeTransfer(receiver, transferExactAmounts ? partialFillAmount : tokenBalance);
             } else if (tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
                 uint tokenBalance = IERC721(tokens[i]).balanceOf(address(this));
                 require(amounts[i] == 1 && tokenBalance >= 1, "INVALID_OUTPUT_ERC721_AMOUNT");
