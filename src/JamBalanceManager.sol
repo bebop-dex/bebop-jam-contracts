@@ -65,12 +65,11 @@ contract JamBalanceManager is IJamBalanceManager {
                 continue;
             } else if (data.tokenTransferTypes[i] == Commands.NATIVE_TRANSFER) {
                 require(data.tokens[i] == JamOrder.NATIVE_TOKEN, "INVALID_NATIVE_TOKEN_ADDRESS");
+                require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
                 if (data.receiver != operator){
                     JamTransfer(operator).transferNativeFromContract(
                         data.receiver, BMath.getPercentage(data.amounts[i], data.fillPercent)
                     );
-                } else {
-                    require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
                 }
             } else if (data.tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
                 require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
@@ -135,12 +134,11 @@ contract JamBalanceManager is IJamBalanceManager {
                 continue;
             } else if (data.tokenTransferTypes[i] == Commands.NATIVE_TRANSFER) {
                 require(data.tokens[i] == JamOrder.NATIVE_TOKEN, "INVALID_NATIVE_TOKEN_ADDRESS");
+                require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
                 if (data.receiver != operator){
                     JamTransfer(operator).transferNativeFromContract(
                         data.receiver, BMath.getPercentage(data.amounts[i], data.fillPercent)
                     );
-                } else {
-                    require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
                 }
             } else if (data.tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
                 require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
