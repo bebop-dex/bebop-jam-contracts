@@ -1,5 +1,6 @@
 import fs from "fs";
 import "@nomiclabs/hardhat-waffle";
+import "@nomicfoundation/hardhat-verify";
 import "@typechain/hardhat";
 import "hardhat-gas-reporter"
 import "hardhat-preprocessor";
@@ -74,8 +75,27 @@ const config: HardhatUserConfig = {
     arbitrum: {
       url: 'https://arb-mainnet.g.alchemy.com/v2/Q39gdiKfeBSD5lr30t-OJQzl5VIgbwVR',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined
+    },
+    avalanche: {
+      url: 'https://avalanche-mainnet.infura.io/v3/5ba6a6866dfc47559bb64b7738e960a7',
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined
     }
-  }
+  },
+  etherscan: {
+    apiKey: {
+      avalanche: "notrequired"
+    },
+    customChains: [
+      {
+        network: "avalanche",
+        chainId: 43114,
+        urls: {
+          apiURL: "https://api.avascan.info/v2/network/mainnet/evm/43114/etherscan",
+          browserURL: "https://mainnet.avascan.info/blockchain/mainnet"
+        }
+      }
+    ]
+  },
 };
 
 export default config;

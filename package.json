@@ -14,6 +14,8 @@
   },
   "author": "<info@bebop.xyz>",
   "devDependencies": {
+    "@1inch/permit-signed-approvals-utils": "^1.4.8",
+    "@nomicfoundation/hardhat-verify": "^2.0.3",
     "@nomiclabs/hardhat-ethers": "^2.0.6",
     "@nomiclabs/hardhat-waffle": "^2.0.3",
     "@typechain/ethers-v5": "^10.0.0",
@@ -30,7 +32,6 @@
     "hardhat-preprocessor": "^0.1.4",
     "ts-node": "^10.7.0",
     "typechain": "^8.0.0",
-    "typescript": "^4.6.4",
-    "@1inch/permit-signed-approvals-utils": "^1.4.8"
+    "typescript": "^4.6.4"
   }
 }
