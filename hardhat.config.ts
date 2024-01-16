@@ -79,12 +79,14 @@ const config: HardhatUserConfig = {
     avalanche: {
       url: 'https://avalanche-mainnet.infura.io/v3/5ba6a6866dfc47559bb64b7738e960a7',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined
+    },
+    bsc: {
+      url: 'https://bsc-dataseed3.bnbchain.org',
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined
     }
   },
   etherscan: {
-    apiKey: {
-      avalanche: "notrequired"
-    },
+    apiKey: process.env.ETHERSCAN_API_KEY,
     customChains: [
       {
         network: "avalanche",

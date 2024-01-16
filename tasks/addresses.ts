@@ -1,5 +1,5 @@
 function getPermit2Address(chainId: number) {
-  if ([137, 1, 42161, 43114].includes(chainId)) {
+  if ([137, 1, 42161, 43114, 56].includes(chainId)) {
     return '0x000000000022D473030F116dDEE9F6B43aC78BA3'
   }
 
@@ -15,6 +15,8 @@ function getDaiAddress(chainId: number) {
     case 42161:
       return '0x0000000000000000000000000000000000000000'
     case 43114:
+      return '0x0000000000000000000000000000000000000000'
+    case 56:
       return '0x0000000000000000000000000000000000000000'
     default:
       throw new Error("Dai address not specified.")
