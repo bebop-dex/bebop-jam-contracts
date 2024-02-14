@@ -135,3 +135,11 @@ Run slither:
 ```shell
 slither --config-file slither.config.json --checklist . > slither.md
 ```
+
+# Deploying to ZKSync
+
+`PRIVATE_KEY='xxx' npx hardhat deploy-zksync --script deploy/deployZkSync.ts --network zkSyncTestnet`
+
+Verifying:
+
+`npx hardhat verify --show-stack-traces --network zkSyncTestnet 0x1acbBaDF7486885B33E2199fFeACD6a232adb01C 0x0000000000225e31D15943971F47aD3022F714Fa 0x0000000000000000000000000000000000000000`

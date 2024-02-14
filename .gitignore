@@ -7,7 +7,10 @@ node_modules/
 
 #Hardhat files
 cache_hardhat/
+cache_hardhat-zk/
 artifacts/
+artifacts-zk/
+
 
 #Hardhat plugin files
 typechain-types/
@@ -15,3 +18,5 @@ typechain-types/
 .DS_Store
 .idea
 .env
+flatten
+

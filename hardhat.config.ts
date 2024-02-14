@@ -1,6 +1,9 @@
 import fs from "fs";
 import "@nomiclabs/hardhat-waffle";
 import "@nomicfoundation/hardhat-verify";
+import "@matterlabs/hardhat-zksync-deploy";
+import "@matterlabs/hardhat-zksync-solc";
+import "@matterlabs/hardhat-zksync-verify";
 import "@typechain/hardhat";
 import "hardhat-gas-reporter"
 import "hardhat-preprocessor";
@@ -8,6 +11,7 @@ import { HardhatUserConfig, task } from "hardhat/config";
 
 import deploy from "./tasks/deploy";
 import deploySolver from "./tasks/deploySolver";
+import deployZkSync from "./deploy/deployZkSync";
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
@@ -21,8 +25,18 @@ function getRemappings() {
 
 task("deploy", "Deploy").setAction(deploy);
 task("deploySolver", "Deploy Solver").addParam('settlement', 'Jam Settlement Contract Address').setAction(deploySolver);
+task("deployZkSync", "Deploy Zk Sync").setAction(deployZkSync);
 
 const config: HardhatUserConfig = {
+  zksolc: {
+    version: "1.3.22", // Uses latest available in https://github.com/matter-labs/zksolc-bin/
+    settings: {
+      optimizer: {
+        enabled: true,
+        mode: 'z', // Optimise for contract size
+      }
+    },
+  },
   typechain: {
     externalArtifacts: [
         "./test/hardhat/bebop/BebopSettlement.json"
@@ -62,27 +76,49 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       chainId: 1,
-      allowUnlimitedContractSize: true
+      allowUnlimitedContractSize: true,
+      zksync: false
+    },
+    sepolia: {
+      url: "https://eth-sepolia.public.blastapi.io",
+      zksync: false,
+    },
+    zkSyncTestnet: {
+      url: "https://sepolia.era.zksync.dev",
+      ethNetwork: "sepolia",
+      zksync: true,
+      verifyURL: 'https://explorer.sepolia.era.zksync.dev/contract_verification'
+    },
+    zkSyncMainnet: {
+      url: "https://mainnet.era.zksync.io",
+      ethNetwork: "ethereum",
+      zksync: true,
+      verifyURL: 'https://zksync2-mainnet-explorer.zksync.io/contract_verification'
     },
     polygon: {
       url: 'https://polygon-mainnet.g.alchemy.com/v2/Q39gdiKfeBSD5lr30t-OJQzl5VIgbwVR',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+      zksync: false
     },
     ethereum: {
       url: 'https://eth-mainnet.g.alchemy.com/v2/Q39gdiKfeBSD5lr30t-OJQzl5VIgbwVR',
-      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+      zksync: false
     },
     arbitrum: {
       url: 'https://arb-mainnet.g.alchemy.com/v2/Q39gdiKfeBSD5lr30t-OJQzl5VIgbwVR',
-      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+      zksync: false
     },
     avalanche: {
       url: 'https://avalanche-mainnet.infura.io/v3/5ba6a6866dfc47559bb64b7738e960a7',
-      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+      zksync: false
     },
     bsc: {
       url: 'https://bsc-dataseed3.bnbchain.org',
-      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+      zksync: false
     }
   },
   etherscan: {
