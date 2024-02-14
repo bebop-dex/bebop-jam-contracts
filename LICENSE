@@ -1,3 +1,9 @@
+Modifications and derivatives Copyright (c) Bebop Ltd - Unlicensed
+
+Modifications to original source:
+   - Remove solmate
+
+foundry-rs/hardhat-foundry-template
 Copyright (c) 2022 Devan Non
 
                               Apache License
