@@ -96,22 +96,22 @@ const config: HardhatUserConfig = {
       verifyURL: 'https://zksync2-mainnet-explorer.zksync.io/contract_verification'
     },
     polygon: {
-      url: 'https://polygon-mainnet.g.alchemy.com/v2/Q39gdiKfeBSD5lr30t-OJQzl5VIgbwVR',
+      url: 'https://polygon.llamarpc.com',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
       zksync: false
     },
     ethereum: {
-      url: 'https://eth-mainnet.g.alchemy.com/v2/Q39gdiKfeBSD5lr30t-OJQzl5VIgbwVR',
+      url: 'https://eth.llamarpc.com',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
       zksync: false
     },
     arbitrum: {
-      url: 'https://arb-mainnet.g.alchemy.com/v2/Q39gdiKfeBSD5lr30t-OJQzl5VIgbwVR',
+      url: 'https://rpc.ankr.com/arbitrum',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
       zksync: false
     },
     avalanche: {
-      url: 'https://avalanche-mainnet.infura.io/v3/5ba6a6866dfc47559bb64b7738e960a7',
+      url: 'https://avalanche.drpc.org',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
       zksync: false
     },
