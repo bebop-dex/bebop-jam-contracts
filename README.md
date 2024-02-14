@@ -7,7 +7,7 @@
 ![Github Actions](https://github.com/bebop-dex/bebop-jam-contracts/workflows/test/badge.svg)
 
 
-JAM (Just-in-Time Aggregation Model) is Bebop's upcoming DeFi liquidity aggregator system allowing any token to any token swaps with highly efficient execution quality.
+JAM (Just-in-Time Aggregation Model) is Bebop's DeFi liquidity aggregator system allowing any token to any token swaps with highly efficient execution quality.
 
 JAM Solvers are independently run services that provide quotes to Bebop users on an RFQ (Request for Quote) basis. They are responsible for providing accurate prices and reliably executing swaps for the given quotes.
 
