@@ -138,8 +138,17 @@ slither --config-file slither.config.json --checklist . > slither.md
 
 # Deploying to ZKSync
 
-`PRIVATE_KEY='xxx' npx hardhat deploy-zksync --script deploy/deployZkSync.ts --network zkSyncTestnet`
+```
+// Compile
+npm install
+forge install
+npm run compile -- --network zkSyncTestnet
 
-Verifying:
+// Deploy
+PRIVATE_KEY='xxx' npx hardhat deploy-zksync --script deploy/deployZkSync.ts --network zkSyncTestnet
+// Take the JamSettlement contract address
 
-`npx hardhat verify --show-stack-traces --network zkSyncTestnet 0x1acbBaDF7486885B33E2199fFeACD6a232adb01C 0x0000000000225e31D15943971F47aD3022F714Fa 0x0000000000000000000000000000000000000000`
+// Verify
+npx hardhat verify --show-stack-traces --network zkSyncTestnet <JamSettlement Contract Address> 0x0000000000225e31D15943971F47aD3022F714Fa 0x0000000000000000000000000000000000000000
+
+```
