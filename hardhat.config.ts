@@ -110,6 +110,11 @@ const config: HardhatUserConfig = {
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
       zksync: false
     },
+    optimism: {
+      url: 'https://optimism.llamarpc.com',
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+      zksync: false
+    },
     avalanche: {
       url: 'https://avalanche.drpc.org',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
@@ -122,7 +127,9 @@ const config: HardhatUserConfig = {
     }
   },
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY,
+    apiKey: {
+      optimisticEthereum: process.env.ETHERSCAN_API_KEY!,
+    },
     customChains: [
       {
         network: "avalanche",

@@ -11,7 +11,7 @@ export default async function deploy(
   const permit2Address = getPermit2Address(chainId)
   const daiAddress = getDaiAddress(chainId)
   const JamSettlement = await ethers.getContractFactory("JamSettlement");
-  const settlement = await JamSettlement.deploy(permit2Address, daiAddress)
+  const settlement = await JamSettlement.deploy(permit2Address, daiAddress);
   console.log("Hash:", settlement.deployTransaction.hash);
   await settlement.deployed();
   console.log("JamSettlement deployed to:", settlement.address);
