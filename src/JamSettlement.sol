@@ -6,6 +6,7 @@ import "./base/JamSigning.sol";
 import "./base/JamTransfer.sol";
 import "./interfaces/IJamBalanceManager.sol";
 import "./interfaces/IJamSettlement.sol";
+import "./interfaces/IBlast.sol";
 import "./libraries/JamInteraction.sol";
 import "./libraries/JamOrder.sol";
 import "./libraries/JamHooks.sol";
@@ -14,18 +15,29 @@ import "./libraries/common/BMath.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title JamSettlement
 /// @notice The settlement contract executes the full lifecycle of a trade on chain.
 /// Solvers figure out what "interactions" to pass to this contract such that the user order is fulfilled.
 /// The contract ensures that only the user agreed price can be executed and otherwise will fail to execute.
 /// As long as the trade is fulfilled, the solver is allowed to keep any potential excess.
-contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransfer, ERC721Holder, ERC1155Holder {
+contract JamSettlement is IJamSettlement, Ownable, ReentrancyGuard, JamSigning, JamTransfer, ERC721Holder, ERC1155Holder {
 
     IJamBalanceManager public immutable balanceManager;
+    IBlast private constant BLAST = IBlast(0x4300000000000000000000000000000000000002);
 
     constructor(address _permit2, address _daiAddress) {
         balanceManager = new JamBalanceManager(address(this), _permit2, _daiAddress);
+        BLAST.configureClaimableGas();
+    }
+
+    function claimContractsGas(bool claimAllGas) external onlyOwner {
+        if (claimAllGas){
+            BLAST.claimAllGas(address(this), msg.sender);
+        } else {
+            BLAST.claimMaxGas(address(this), msg.sender);
+        }
     }
 
     receive() external payable {}

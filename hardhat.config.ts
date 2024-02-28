@@ -47,7 +47,7 @@ const config: HardhatUserConfig = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200000,
+        runs: 10000,
       },
       viaIR: true
     },
@@ -122,6 +122,11 @@ const config: HardhatUserConfig = {
     },
     bsc: {
       url: 'https://bsc-dataseed3.bnbchain.org',
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+      zksync: false
+    },
+    blast: {
+      url: '',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
       zksync: false
     }
