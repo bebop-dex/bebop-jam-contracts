@@ -124,11 +124,17 @@ const config: HardhatUserConfig = {
       url: 'https://bsc-dataseed3.bnbchain.org',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
       zksync: false
+    },
+    mode: {
+      url: 'https://mode.drpc.org',
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+      zksync: false
     }
   },
   etherscan: {
     apiKey: {
       optimisticEthereum: process.env.ETHERSCAN_API_KEY!,
+      mode: "abc",
     },
     customChains: [
       {
@@ -138,8 +144,16 @@ const config: HardhatUserConfig = {
           apiURL: "https://api.avascan.info/v2/network/mainnet/evm/43114/etherscan",
           browserURL: "https://mainnet.avascan.info/blockchain/mainnet"
         }
+      },
+      {
+        network: "mode",
+        chainId: 34443,
+        urls: {
+          apiURL: "https://explorer.mode.network/api",
+          browserURL: "https://explorer.mode.network/"
+        }
       }
-    ]
+    ],
   },
 };
 
