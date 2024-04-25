@@ -129,10 +129,16 @@ const config: HardhatUserConfig = {
       url: 'https://mode.drpc.org',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
       zksync: false
+    },
+    base: {
+      url: 'https://mainnet.base.org',
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+      zksync: false
     }
   },
   etherscan: {
     apiKey: {
+      base: process.env.ETHERSCAN_API_KEY!,
       optimisticEthereum: process.env.ETHERSCAN_API_KEY!,
       mode: "abc",
     },
