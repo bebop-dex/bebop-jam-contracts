@@ -95,6 +95,11 @@ const config: HardhatUserConfig = {
       zksync: true,
       verifyURL: 'https://zksync2-mainnet-explorer.zksync.io/contract_verification'
     },
+    scroll: {
+      url: "https://rpc.scroll.io",
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+      zksync: false
+    },
     polygon: {
       url: 'https://polygon.llamarpc.com',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
@@ -140,6 +145,7 @@ const config: HardhatUserConfig = {
     apiKey: {
       base: process.env.ETHERSCAN_API_KEY!,
       optimisticEthereum: process.env.ETHERSCAN_API_KEY!,
+      scroll: process.env.ETHERSCAN_API_KEY!,
       mode: "abc",
     },
     customChains: [
@@ -157,6 +163,14 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "https://explorer.mode.network/api",
           browserURL: "https://explorer.mode.network/"
+        }
+      },
+      {
+        network: "scroll",
+        chainId: 534352,
+        urls: {
+          apiURL: "https://api.scrollscan.com/api",
+          browserURL: "https://scrollscan.com/"
         }
       }
     ],
