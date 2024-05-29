@@ -139,6 +139,11 @@ const config: HardhatUserConfig = {
       url: 'https://mainnet.base.org',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
       zksync: false
+    },
+    taiko: {
+      url: 'https://rpc.ankr.com/taiko',
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+      zksync: false
     }
   },
   etherscan: {
@@ -146,6 +151,7 @@ const config: HardhatUserConfig = {
       base: process.env.ETHERSCAN_API_KEY!,
       optimisticEthereum: process.env.ETHERSCAN_API_KEY!,
       scroll: process.env.ETHERSCAN_API_KEY!,
+      taiko: process.env.ETHERSCAN_API_KEY!,
       mode: "abc",
     },
     customChains: [
@@ -171,6 +177,14 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "https://api.scrollscan.com/api",
           browserURL: "https://scrollscan.com/"
+        }
+      },
+      {
+        network: "taiko",
+        chainId: 167000,
+        urls: {
+          apiURL: "https://api.taikoscan.io/api",
+          browserURL: "https://taikoscan.io/"
         }
       }
     ],
