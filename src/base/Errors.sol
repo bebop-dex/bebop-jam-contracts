@@ -1,0 +1,84 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.27;
+
+
+/// @notice Thrown when solver sends less than expected to settlement contract
+error InvalidOutputBalance(address token, uint256 expected, uint256 actual);
+
+/// @notice Thrown when sending ETH via call fails
+error FailedToSendEth();
+
+/// @notice Thrown when fill percentage is different for same token during batchSettle
+error InvalidFillPercentForSameToken();
+
+/// @notice Thrown when the passed in signature is not a valid length
+error InvalidSignatureLength();
+
+/// @notice Thrown when the recovered signer is equal to the zero address
+error InvalidSignature();
+
+/// @notice Thrown when the recovered signer does not equal the claimedSigner
+error InvalidSigner();
+
+/// @notice Thrown when the recovered contract signature is incorrect
+error InvalidContractSignature();
+
+/// @notice Thrown when msg.sender is not allowed to call a function
+error InvalidExecutor();
+
+/// @notice Thrown when length of sell tokens and sell amounts are not equal
+error SellTokensInvalidLength();
+
+/// @notice Thrown when length of buy tokens and buy amounts are not equal
+error BuyTokensInvalidLength();
+
+/// @notice Thrown when fill percentage is lower than minimum fill percentage
+error FillPercentTooLow();
+
+/// @notice Thrown when fill percentage is not 100% for native token
+error InvalidFillPercentForNative();
+
+/// @notice Thrown when order is expired
+error OrderExpired();
+
+/// @notice Thrown when nonce is already invalidated
+error InvalidNonce();
+
+/// @notice Thrown when nonce is zero
+error ZeroNonce();
+
+/// @notice Thrown when length of increased amounts is not equal to tokens length
+error InvalidIncreasedAmountsLength();
+
+/// @notice Thrown when increased amounts is less than previous amount
+error InvalidIncreasedAmounts();
+
+/// @notice Thrown when length of signatures array is not equal to batch length
+error InvalidBatchSignaturesLength();
+
+/// @notice Thrown when length of PermitsUsage array is not equal to batch length
+error InvalidBatchPermitsLength();
+
+/// @notice Thrown when length of hooks array is not equal to batch length
+error InvalidBatchHooksLength();
+
+/// @notice Thrown when length of fills array is not equal to batch length
+error InvalidBatchFillPercentsLength();
+
+/// @notice Thrown when one of the orders in batch has settlement contract as receiver
+error InvalidReceiverInBatch();
+
+/// @notice Thrown when caller is not settlement contract
+error InvalidCaller();
+
+/// @notice Thrown when interactions failed
+error InteractionsFailed();
+
+/// @notice Thrown when beforeSettle hooks failed
+error BeforeSettleHooksFailed();
+
+/// @notice Thrown when beforeSettle hooks failed
+error AfterSettleHooksFailed();
+
+/// @notice Thrown for unknown blend order type
+error InvalidBlendOrderType();

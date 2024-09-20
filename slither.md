@@ -124,7 +124,7 @@ src/base/JamTransfer.sol#L89
 
 
  - [ ] ID-13
-[JamSigning.validateBatchOrders(JamOrder.Data[],JamHooks.Def[],Signature.TypedSignature[],Signature.TakerPermitsInfo[],bool[],uint16[]).i](src/base/JamSigning.sol#L224) is a local variable never initialized
+[JamSigning.validateBatchOrders(JamOrder.Data[],JamHooks.Def[],Signature.TypedSignature[],Signature.TakerPermitsInfo[],bool[],uint16[]).i](src/base/JamValidation.sol#L224) is a local variable never initialized
 
 src/base/JamSigning.sol#L224
 
@@ -178,7 +178,7 @@ src/JamSettlement.sol#L34
 
 
  - [ ] ID-22
-[JamSigning.validateBatchOrders(JamOrder.Data[],JamHooks.Def[],Signature.TypedSignature[],Signature.TakerPermitsInfo[],bool[],uint16[]).takersWithPermits](src/base/JamSigning.sol#L223) is a local variable never initialized
+[JamSigning.validateBatchOrders(JamOrder.Data[],JamHooks.Def[],Signature.TypedSignature[],Signature.TakerPermitsInfo[],bool[],uint16[]).takersWithPermits](src/base/JamValidation.sol#L223) is a local variable never initialized
 
 src/base/JamSigning.sol#L223
 
@@ -202,7 +202,7 @@ src/JamSettlement.sol#L133
 
 
  - [ ] ID-26
-[JamSigning.validateIncreasedAmounts(uint256[],uint256[]).i](src/base/JamSigning.sol#L201) is a local variable never initialized
+[JamSigning.validateIncreasedAmounts(uint256[],uint256[]).i](src/base/JamValidation.sol#L201) is a local variable never initialized
 
 src/base/JamSigning.sol#L201
 
@@ -567,9 +567,9 @@ src/JamSettlement.sol#L85-L100
 Impact: Low
 Confidence: Medium
  - [ ] ID-75
-[JamSigning.validateOrder(JamOrder.Data,JamHooks.Def,Signature.TypedSignature,uint16)](src/base/JamSigning.sol#L141-L158) uses timestamp for comparisons
+[JamSigning.validateOrder(JamOrder.Data,JamHooks.Def,Signature.TypedSignature,uint16)](src/base/JamValidation.sol#L141-L158) uses timestamp for comparisons
 	Dangerous comparisons:
-	- [require(bool,string)(block.timestamp < order.expiry,ORDER_EXPIRED)](src/base/JamSigning.sol#L157)
+	- [require(bool,string)(block.timestamp < order.expiry,ORDER_EXPIRED)](src/base/JamValidation.sol#L157)
 
 src/base/JamSigning.sol#L141-L158
 
@@ -664,8 +664,8 @@ src/libraries/Signature.sol#L25-L39
 
 
  - [ ] ID-89
-[JamSigning.validateSignature(address,bytes32,Signature.TypedSignature)](src/base/JamSigning.sol#L105-L134) uses assembly
-	- [INLINE ASM](src/base/JamSigning.sol#L120-L124)
+[JamSigning.validateSignature(address,bytes32,Signature.TypedSignature)](src/base/JamValidation.sol#L105-L134) uses assembly
+	- [INLINE ASM](src/base/JamValidation.sol#L120-L124)
 
 src/base/JamSigning.sol#L105-L134
 
@@ -690,7 +690,7 @@ src/JamBalanceManager.sol#L94-L175
 Impact: Informational
 Confidence: High
  - [ ] ID-92
-Pragma version[^0.8.17](src/base/JamSigning.sol#L2) allows old versions
+Pragma version[^0.8.17](src/base/JamValidation.sol#L2) allows old versions
 
 src/base/JamSigning.sol#L2
 
@@ -732,7 +732,7 @@ src/libraries/JamHooks.sol#L2
 
 
  - [ ] ID-99
-Pragma version[^0.8.17](src/libraries/common/SafeCast160.sol#L2) allows old versions
+Pragma version[^0.8.17](src/external-libs/SafeCast160.sol#L2) allows old versions
 
 src/libraries/common/SafeCast160.sol#L2
 
@@ -837,7 +837,7 @@ src/JamBalanceManager.sol#L25
 
 
  - [ ] ID-115
-Function [JamSigning.DOMAIN_SEPARATOR()](src/base/JamSigning.sol#L44-L50) is not in mixedCase
+Function [JamSigning.DOMAIN_SEPARATOR()](src/base/JamValidation.sol#L44-L50) is not in mixedCase
 
 src/base/JamSigning.sol#L44-L50
 
@@ -849,13 +849,13 @@ src/JamBalanceManager.sol#L26
 
 
  - [ ] ID-117
-Variable [JamSigning._CACHED_CHAIN_ID](src/base/JamSigning.sol#L33) is not in mixedCase
+Variable [JamSigning._CACHED_CHAIN_ID](src/base/JamValidation.sol#L33) is not in mixedCase
 
 src/base/JamSigning.sol#L33
 
 
  - [ ] ID-118
-Variable [JamSigning._CACHED_DOMAIN_SEPARATOR](src/base/JamSigning.sol#L32) is not in mixedCase
+Variable [JamSigning._CACHED_DOMAIN_SEPARATOR](src/base/JamValidation.sol#L32) is not in mixedCase
 
 src/base/JamSigning.sol#L32
 
@@ -912,7 +912,7 @@ src/JamBalanceManager.sol#L182-L201
 
 
  - [ ] ID-126
-Function [JamSigning.invalidateOrderNonce(address,uint256,bool)](src/base/JamSigning.sol#L180-L188) contains magic number: 8
+Function [JamSigning.invalidateOrderNonce(address,uint256,bool)](src/base/JamValidation.sol#L180-L188) contains magic number: 8
 
 src/base/JamSigning.sol#L180-L188
 
@@ -924,13 +924,13 @@ src/libraries/Signature.sol#L25-L39
 
 
  - [ ] ID-128
-Function [JamSigning.validateSignature(address,bytes32,Signature.TypedSignature)](src/base/JamSigning.sol#L105-L134) contains magic number: 28
+Function [JamSigning.validateSignature(address,bytes32,Signature.TypedSignature)](src/base/JamValidation.sol#L105-L134) contains magic number: 28
 
 src/base/JamSigning.sol#L105-L134
 
 
  - [ ] ID-129
-Function [JamSigning.isLimitOrderNonceValid(address,uint256)](src/base/JamSigning.sol#L170-L174) contains magic number: 8
+Function [JamSigning.isLimitOrderNonceValid(address,uint256)](src/base/JamValidation.sol#L170-L174) contains magic number: 8
 
 src/base/JamSigning.sol#L170-L174
 

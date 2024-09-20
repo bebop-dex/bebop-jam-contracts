@@ -1,4 +1,6 @@
 // ETH Tokens
+import {ethers} from "hardhat";
+
 export const TOKENS = {
     "ETH": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
     "WETH": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
@@ -11,8 +13,28 @@ export const TOKENS = {
     "MKR": "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
     "AAVE": "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
     "SNX": "0xC011a73ee8576Fb46F5E1c5751cA3B9Fe0af2a6F",
-    "DYDX": "0x92D6C1e31e14520e676a687F0a93788B716BEff5"
+    "DYDX": "0x92D6C1e31e14520e676a687F0a93788B716BEff5",
+    "USDT": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
 }
+
+export const AMOUNTS = {
+    [TOKENS.WETH]: ethers.utils.parseUnits("1", 18).toString(),
+    [TOKENS.DAI]: ethers.utils.parseUnits("1000", 18).toString(),
+    [TOKENS.USDC]: ethers.utils.parseUnits("123", 6).toString(),
+    [TOKENS.USDT]: ethers.utils.parseUnits("120", 6).toString(),
+    [TOKENS.WBTC]: ethers.utils.parseUnits("0.1", 8).toString(),
+    [TOKENS.LINK]: ethers.utils.parseUnits("2", 18).toString(),
+    [TOKENS.MKR]: ethers.utils.parseUnits("1", 18).toString(),
+    [TOKENS.YFI]: ethers.utils.parseUnits("1", 18).toString(),
+    [TOKENS.UNI]: ethers.utils.parseUnits("12", 18).toString(),
+    [TOKENS.AAVE]: ethers.utils.parseUnits("0.2", 18).toString(),
+    [TOKENS.DYDX]: ethers.utils.parseUnits("11", 18).toString(),
+    [TOKENS.SNX]: ethers.utils.parseUnits("322", 18).toString()
+}
+export let AMOUNTS2: {[p: string]: string} = {};
+Object.entries(AMOUNTS).forEach(([token, amount]) => {
+    AMOUNTS2[token] = (BigInt(amount) * BigInt(2)).toString();
+});
 
 export const NFTS_ERC721 = {
     "bayc": {
@@ -54,6 +76,7 @@ export const NFTS_ERC1155 = {
     }
 }
 
+export const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
 export const PERMIT2_ADDRESS = "0x000000000022d473030f116ddee9f6b43ac78ba3"
 export const BINANCE_ADDRESS = "0x28C6c06298d514Db089934071355E5743bf21d60"
 export const NFT_COLLECTOR = "0x54BE3a794282C030b15E43aE2bB182E14c409C5e"

@@ -1,20 +1,16 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.27;
 
 
 import "./libraries/JamInteraction.sol";
 import "./libraries/JamOrder.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
-import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import "./external-libs/SafeTransferLib.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @title JamSolver
 /// @notice This is an example of solver used for tests only
-contract JamSolver is ERC721Holder, ERC1155Holder{
-    using SafeERC20 for IERC20;
+contract JamSolver {
+    using SafeTransferLib for IERC20;
     address public owner;
     address public settlement;
     address private constant NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -43,7 +39,8 @@ contract JamSolver is ERC721Holder, ERC1155Holder{
 
     function withdraw (address receiver) public onlyOwner {
         if (address(this).balance > 0) {
-            payable(receiver).call{value: address(this).balance}("");
+            (bool sent, ) = payable(receiver).call{value: address(this).balance}("");
+            require(sent, "Failed to send Ether");
         }
     }
 
@@ -56,26 +53,20 @@ contract JamSolver is ERC721Holder, ERC1155Holder{
         }
     }
 
-    function execute (
-        JamInteraction.Data[] calldata calls, address[] calldata outputTokens, uint256[] calldata outputAmounts,
-        uint256[] calldata outputIds, bytes calldata outputTransferTypes, address receiver
+    function simpleExecute (
+        JamInteraction.Data[] calldata calls, address[] calldata outputTokens, uint256[] calldata outputAmounts, address receiver
     ) public payable onlyOwnerOrigin onlySettlement {
         for(uint i; i < calls.length; i++) {
             JamInteraction.execute(calls[i]);
         }
 
         for(uint i; i < outputTokens.length; i++) {
-            if (outputTransferTypes[i] == Commands.SIMPLE_TRANSFER){
+            if (outputTokens[i] == NATIVE_TOKEN){
+                (bool sent, ) = payable(receiver).call{value: outputAmounts[i]}("");
+                require(sent, "Failed to send Ether");
+            } else {
                 IERC20 token = IERC20(outputTokens[i]);
                 token.safeTransfer(receiver, outputAmounts[i]);
-            } else if (outputTransferTypes[i] == Commands.NATIVE_TRANSFER){
-                payable(receiver).call{value: outputAmounts[i]}("");
-            } else if (outputTransferTypes[i] == Commands.NFT_ERC721_TRANSFER){
-                IERC721 token = IERC721(outputTokens[i]);
-                token.safeTransferFrom(address(this), receiver, outputIds[i]);
-            } else if (outputTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER){
-                IERC1155 token = IERC1155(outputTokens[i]);
-                token.safeTransferFrom(address(this), receiver, outputIds[i], outputAmounts[i], "");
             }
         }
     }

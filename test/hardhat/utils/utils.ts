@@ -1,86 +1,40 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {JamOrder, JamSettlement, Signature} from "../../../typechain-types/artifacts/src/JamSettlement";
-import {BigNumber, BigNumberish, BytesLike} from "ethers";
-import {Commands} from "./orders";
+import {BigNumber, BigNumberish, BytesLike, Contract, Signer} from "ethers";
+import {Commands} from "./jamOrders";
 import {ethers} from "hardhat";
 import {expect} from "chai";
-import {PERMIT2_ADDRESS} from "../config";
+import {NATIVE_TOKEN, PERMIT2_ADDRESS, TOKENS} from "../config";
 
-const JAM_ORDER_TYPES = {
-    "JamOrder": [
-        { "name": "taker", "type": "address" },
-        { "name": "receiver", "type": "address" },
-        { "name": "expiry", "type": "uint256" },
-        { "name": "nonce", "type": "uint256" },
-        { "name": "executor", "type": "address" },
-        { "name": "minFillPercent", "type": "uint16" },
-        { "name": "hooksHash", "type": "bytes32" },
-        { "name": "sellTokens", "type": "address[]" },
-        { "name": "buyTokens", "type": "address[]" },
-        { "name": "sellAmounts", "type": "uint256[]" },
-        { "name": "buyAmounts", "type": "uint256[]" },
-        { "name": "sellNFTIds", "type": "uint256[]" },
-        { "name": "buyNFTIds", "type": "uint256[]" },
-        { "name": "sellTokenTransfers", "type": "bytes" },
-        { "name": "buyTokenTransfers", "type": "bytes" },
-    ]
+
+export function generateExpiry(){
+    return Math.floor(Date.now() / 1000) + 1000;
 }
-
-export async function signJamOrder(user: SignerWithAddress, order: JamOrder.DataStruct, settlement: JamSettlement): Promise<Signature.TypedSignatureStruct> {
-    const JAM_DOMAIN = {
-        "name": "JamSettlement",
-        "version": "1",
-        "chainId": await user.getChainId(),
-        "verifyingContract": settlement.address
-    }
-    const signatureBytes = await user._signTypedData(JAM_DOMAIN, JAM_ORDER_TYPES, order);
-    return {
-        signatureType: 1,
-        signatureBytes: signatureBytes
-    }
-}
-
 
 export async function approveTokens(
-    tokens: string[], amounts: BigNumberish[], tokenTransfers: Commands[], user: SignerWithAddress, spender: string
+    tokens: string[], amounts: BigNumberish[], user: SignerWithAddress, spender: string
 ): Promise<BigNumber> {
     let nativeTokenAmount = BigNumber.from(0)
     for (let i = 0; i < tokens.length; i++) {
         let curTokenContract = await ethers.getContractAt("IERC20", tokens[i])
-        if (tokenTransfers[i] === Commands.SIMPLE_TRANSFER) {
-            await curTokenContract.connect(user).approve(spender, amounts[i]);
-        } else if (tokenTransfers[i] === Commands.PERMIT2_TRANSFER || tokenTransfers[i] === Commands.CALL_PERMIT2_THEN_TRANSFER) {
-            await curTokenContract.connect(user).approve(PERMIT2_ADDRESS, amounts[i]);
-        } else if (tokenTransfers[i] === Commands.NATIVE_TRANSFER) {
+        if (tokens[i] === NATIVE_TOKEN) {
             nativeTokenAmount = nativeTokenAmount.add(BigNumber.from(amounts[i]))
-        } else if (tokenTransfers[i] === Commands.NFT_ERC721_TRANSFER) {
-            let nftTokenContract = await ethers.getContractAt("IERC721", tokens[i])
-            await nftTokenContract.connect(user).setApprovalForAll(spender, true);
-        } else if (tokenTransfers[i] === Commands.NFT_ERC1155_TRANSFER) {
-            let nftTokenContract = await ethers.getContractAt("IERC1155", tokens[i])
-            await nftTokenContract.connect(user).setApprovalForAll(spender, true);
+        } else {
+            await curTokenContract.connect(user).approve(spender, amounts[i]);
         }
     }
     return nativeTokenAmount
 }
 
 export async function getBalancesBefore(
-    tokens: string[], receiver: string, buyTokensTransfers: Commands[], buyNFTsIds: BigNumberish[], solverAddress: string
+    tokens: string[], receiver: string, solverAddress: string
 ) {
     let userBalancesBefore: {[id:string]: BigNumberish} = {}
     let solverBalancesBefore: {[id:string]: BigNumberish} = {}
-    let nftId = 0
     for (let [i, token] of tokens.entries()) {
-        if (buyTokensTransfers[i] === Commands.NATIVE_TRANSFER) {
+        if (tokens[i] === NATIVE_TOKEN) {
             userBalancesBefore[token] = await ethers.provider.getBalance(receiver)
             solverBalancesBefore[token] = await ethers.provider.getBalance(solverAddress)
-        } else if (buyTokensTransfers[i] === Commands.NFT_ERC721_TRANSFER) {
-            userBalancesBefore[token] = await (await ethers.getContractAt("IERC721", token)).balanceOf(receiver)
-            solverBalancesBefore[token] = await (await ethers.getContractAt("IERC721", token)).balanceOf(solverAddress)
-            nftId++
-        } else if (buyTokensTransfers[i] === Commands.NFT_ERC1155_TRANSFER) {
-            userBalancesBefore[token] = await (await ethers.getContractAt("IERC1155", token)).balanceOf(receiver, buyNFTsIds[nftId])
-            solverBalancesBefore[token] = await (await ethers.getContractAt("IERC1155", token)).balanceOf(solverAddress, buyNFTsIds[nftId++])
         } else {
             userBalancesBefore[token] = await (await ethers.getContractAt("IERC20", token)).balanceOf(receiver)
             solverBalancesBefore[token] = await (await ethers.getContractAt("IERC20", token)).balanceOf(solverAddress)
@@ -93,9 +47,6 @@ export async function getBalancesBefore(
 export async function verifyBalancesAfter(
     tokens: string[],
     receiver: string,
-    sellTokensTransfers: Commands[],
-    buyTokensTransfers: Commands[],
-    buyNFTsIds: BigNumberish[],
     solverAddress: string,
     usingSolverContract: boolean,
     amounts: BigNumberish[],
@@ -106,26 +57,17 @@ export async function verifyBalancesAfter(
     settlementAddr: string
 ){
     let takerGetExcess = !usingSolverContract && !internalSettle
-    let nftId = 0
     for (let [i, token] of tokens.entries()) {
         let userBalanceAfter;
         let solverBalanceAfter;
 
-        if (buyTokensTransfers[i] === Commands.NATIVE_TRANSFER) {
+        if (tokens[i] === NATIVE_TOKEN) {
             userBalanceAfter = await ethers.provider.getBalance(receiver)
             solverBalanceAfter = await ethers.provider.getBalance(solverAddress)
-        } else if (buyTokensTransfers[i] === Commands.NFT_ERC721_TRANSFER) {
-            userBalanceAfter = await (await ethers.getContractAt("IERC721", token)).balanceOf(receiver)
-            solverBalanceAfter = await (await ethers.getContractAt("IERC721", token)).balanceOf(solverAddress)
-            nftId++
-        } else if (buyTokensTransfers[i] === Commands.NFT_ERC1155_TRANSFER) {
-            userBalanceAfter = await (await ethers.getContractAt("IERC1155", token)).balanceOf(receiver, buyNFTsIds[nftId])
-            solverBalanceAfter = await (await ethers.getContractAt("IERC1155", token)).balanceOf(solverAddress, buyNFTsIds[nftId++])
         } else {
             userBalanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(receiver)
             solverBalanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(solverAddress)
-            if (usingSolverContract &&
-                !(sellTokensTransfers.includes(Commands.NFT_ERC721_TRANSFER) || sellTokensTransfers.includes(Commands.NFT_ERC1155_TRANSFER))){
+            if (usingSolverContract){
                 expect(solverBalanceAfter.sub(solverBalancesBefore[token])).to.be.equal(solverExcess)
             }
         }
@@ -138,13 +80,13 @@ export async function verifyBalancesAfter(
 }
 
 export async function getBatchBalancesBefore(
-    jamOrders: JamOrder.DataStruct[], batchBuyTokensTransfers: Commands[][], solverAddress: string
+    jamOrders: JamOrder.DataStruct[], solverAddress: string
 ): Promise<{[id:string]: {[id:string]: BigNumberish}}> {
     // todo: allow verifying balances if taker has two reversed orders, e.g. USDC->WETH and WETH->USDC
     let allBalancesBefore: {[id:string]: {[id:string]: BigNumberish}} = {};
     for (let [i, order] of jamOrders.entries()){
         let [userBalancesBefore, _] = await getBalancesBefore(
-            order.buyTokens, order.receiver, batchBuyTokensTransfers[i], order.buyNFTIds, solverAddress)
+            order.buyTokens, order.receiver, solverAddress)
         if (allBalancesBefore[order.receiver] === undefined){
             allBalancesBefore[order.receiver] = {}
         }

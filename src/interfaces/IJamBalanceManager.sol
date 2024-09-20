@@ -1,43 +1,53 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.27;
 
-import "../libraries/Signature.sol";
+import "../libraries/ExecInfo.sol";
+import "../libraries/JamOrder.sol";
+import "../libraries/BlendSingleOrder.sol";
+import "../libraries/BlendMultiOrder.sol";
+import "../libraries/BlendAggregateOrder.sol";
+import "./IBebopBlend.sol";
 
 /// @title IJamBalanceManager
 /// @notice User approvals are made here. This handles the complexity of multiple allowance types. 
 interface IJamBalanceManager {
 
-    /// @dev All information needed to transfer tokens
-    struct TransferData {
-        address from;
-        address receiver;
-        address[] tokens;
-        uint256[] amounts;
-        uint256[] nftIds;
-        bytes tokenTransferTypes;
-        uint16 fillPercent;
-    }
+    function transferTokenForBlendSingleOrder(
+        BlendSingleOrder memory order,
+        IBebopBlend.OldSingleQuote memory oldSingleQuote,
+        bytes memory takerSignature,
+        address takerAddress
+    ) external;
 
-    /// @dev indices for transferTokensWithPermits function
-    struct Indices {
-        uint64 batchToApproveInd; // current `batchToApprove` index
-        uint64 permitSignaturesInd; // current `takerPermitsInfo.permitSignatures` index
-        uint64 nftsInd; // current `data.nftIds` index
-        uint64 batchLen; // current length of `batchTransferDetails`
-    }
+    function transferTokensForMultiBebopOrder(
+        BlendMultiOrder memory order,
+        IBebopBlend.OldMultiQuote memory oldMultiQuote,
+        bytes memory takerSignature,
+        address takerAddress
+    ) external;
 
-    /// @notice Transfer tokens from taker to solverContract/settlementContract/makerAddress.
-    /// Or transfer tokens directly from maker to taker for settleInternal case
-    /// @param transferData data for transfer
+    function transferTokensForAggregateBebopOrder(
+        BlendAggregateOrder memory order,
+        IBebopBlend.OldAggregateQuote memory oldAggregateQuote,
+        bytes memory takerSignature,
+        address takerAddress
+    ) external;
+
+
+    function transferTokensWithPermit2(
+        JamOrder.Data calldata order,
+        bytes calldata signature,
+        bytes32 hooksHash,
+        address receiver,
+        uint16 fillPercent
+    ) external;
+
     function transferTokens(
-        TransferData calldata transferData
+        address[] calldata tokens,
+        uint256[] calldata amounts,
+        address sender,
+        address receiver,
+        uint16 fillPercent
     ) external;
 
-    /// @notice Transfer tokens from taker to solverContract/settlementContract
-    /// @param transferData data for transfer
-    /// @param takerPermitsInfo taker permits info
-    function transferTokensWithPermits(
-        TransferData calldata transferData,
-        Signature.TakerPermitsInfo calldata takerPermitsInfo
-    ) external;
 }

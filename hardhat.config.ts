@@ -39,11 +39,11 @@ const config: HardhatUserConfig = {
   },
   typechain: {
     externalArtifacts: [
-        "./test/hardhat/bebop/BebopSettlement.json"
+        "./test/hardhat/blend/BebopSettlement.json"
     ]
   },
   solidity: {
-    version: "0.8.17",
+    version: "0.8.27",
     settings: {
       optimizer: {
         enabled: true,

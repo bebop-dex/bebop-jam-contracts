@@ -1,208 +1,126 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.27;
 
+import "./base/JamTransfer.sol";
 import "./interfaces/IJamBalanceManager.sol";
 import "./interfaces/IPermit2.sol";
-import "./interfaces/IDaiLikePermit.sol";
-import "./libraries/JamOrder.sol";
-import "./libraries/Signature.sol";
-import "./libraries/common/SafeCast160.sol";
 import "./libraries/common/BMath.sol";
-import "./base/JamTransfer.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title JamBalanceManager
 /// @notice The reason a balance manager exists is to prevent interaction to the settlement contract draining user funds
 /// By having another contract that allowances are made to, we can enforce that it is only used to draw in user balances to settlement and not sent out
 contract JamBalanceManager is IJamBalanceManager {
+
+    using SafeTransferLib for IERC20;
+    using BlendSingleOrderLib for BlendSingleOrder;
+    using BlendMultiOrderLib for BlendMultiOrder;
+    using BlendAggregateOrderLib for BlendAggregateOrder;
+
     address private immutable operator;
-
-    using SafeERC20 for IERC20;
-
     IPermit2 private immutable PERMIT2;
-    address private immutable DAI_TOKEN;
     uint256 private immutable _chainId;
 
-    constructor(address _operator, address _permit2, address _daiAddress) {
+    constructor(address _operator, address _permit2) {
         // Operator can be defined at creation time with `msg.sender`
         // Pass in the settlement - and that can be the only caller.
         operator = _operator;
         _chainId = block.chainid;
         PERMIT2 = IPermit2(_permit2);
-        DAI_TOKEN = _daiAddress;
     }
 
     modifier onlyOperator(address account) {
-        require(account == operator, "INVALID_CALLER");
+        require(account == operator, InvalidCaller());
         _;
     }
 
-    /// @inheritdoc IJamBalanceManager
+    function transferTokenForBlendSingleOrder(
+        BlendSingleOrder memory order,
+        IBebopBlend.OldSingleQuote memory oldSingleQuote,
+        bytes memory takerSignature,
+        address takerAddress
+    ) onlyOperator(msg.sender) external {
+        PERMIT2.permitWitnessTransferFrom(
+            IPermit2.PermitTransferFrom(
+                IPermit2.TokenPermissions(order.taker_token, order.taker_amount), order.flags >> 128, order.expiry
+            ),
+            IPermit2.SignatureTransferDetails(operator, order.taker_amount),
+            takerAddress,
+            order.hash(oldSingleQuote.makerAmount, oldSingleQuote.makerNonce),
+            BlendSingleOrderLib.PERMIT2_ORDER_TYPE,
+            takerSignature
+        );
+    }
+
+    function transferTokensForMultiBebopOrder(
+        BlendMultiOrder memory order,
+        IBebopBlend.OldMultiQuote memory oldMultiQuote,
+        bytes memory takerSignature,
+        address takerAddress
+    ) onlyOperator(msg.sender) external {
+        PERMIT2.permitWitnessTransferFrom(
+            order.toBatchPermit2(),
+            order.toSignatureTransferDetails(operator),
+            takerAddress,
+            order.hash(oldMultiQuote.makerAmounts, oldMultiQuote.makerNonce),
+            BlendMultiOrderLib.PERMIT2_ORDER_TYPE,
+            takerSignature
+        );
+    }
+
+    function transferTokensForAggregateBebopOrder(
+        BlendAggregateOrder memory order,
+        IBebopBlend.OldAggregateQuote memory oldAggregateQuote,
+        bytes memory takerSignature,
+        address takerAddress
+    ) onlyOperator(msg.sender) external {
+        (address[] memory tokens, uint256[] memory amounts) = order.unpackTokensAndAmounts();
+        PERMIT2.permitWitnessTransferFrom(
+            order.toBatchPermit2(tokens, amounts),
+            BlendAggregateOrderLib.toSignatureTransferDetails(amounts, operator),
+            takerAddress,
+            order.hash(oldAggregateQuote.makerAmounts, oldAggregateQuote.makerNonces),
+            BlendAggregateOrderLib.PERMIT2_ORDER_TYPE,
+            takerSignature
+        );
+    }
+
+    function transferTokensWithPermit2(
+        JamOrder.Data calldata order,
+        bytes calldata signature,
+        bytes32 hooksHash,
+        address receiver,
+        uint16 fillPercent
+    ) onlyOperator(msg.sender) external {
+        PERMIT2.permitWitnessTransferFrom(
+            JamOrder.toBatchPermit2(order),
+            JamOrder.toSignatureTransferDetails(order, receiver, fillPercent),
+            order.taker,
+            JamOrder.hash(order, hooksHash),
+            JamOrder.PERMIT2_ORDER_TYPE,
+            signature
+        );
+    }
+
     function transferTokens(
-        TransferData calldata data
+        address[] calldata tokens,
+        uint256[] calldata amounts,
+        address sender,
+        address receiver,
+        uint16 fillPercent
     ) onlyOperator(msg.sender) external {
-        IPermit2.AllowanceTransferDetails[] memory batchTransferDetails;
-        uint nftsInd;
-        uint batchLen;
-        for (uint i; i < data.tokens.length; ++i) {
-            if (data.tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER) {
-                IERC20(data.tokens[i]).safeTransferFrom(
-                    data.from, data.receiver, BMath.getPercentage(data.amounts[i], data.fillPercent)
+        for (uint i; i < tokens.length; ++i){
+            if (tokens[i] != JamOrder.NATIVE_TOKEN){
+                require(fillPercent == BMath.HUNDRED_PERCENT, InvalidFillPercentForNative());
+                IERC20(tokens[i]).safeTransferFrom(
+                    sender, receiver, BMath.getPercentage(amounts[i], fillPercent)
                 );
-            } else if (data.tokenTransferTypes[i] == Commands.PERMIT2_TRANSFER) {
-                if (batchLen == 0){
-                    batchTransferDetails = new IPermit2.AllowanceTransferDetails[](data.tokens.length - i);
-                }
-                batchTransferDetails[batchLen++] = IPermit2.AllowanceTransferDetails({
-                    from: data.from,
-                    to: data.receiver,
-                    amount: SafeCast160.toUint160(BMath.getPercentage(data.amounts[i], data.fillPercent)),
-                    token: data.tokens[i]
-                });
-                continue;
-            } else if (data.tokenTransferTypes[i] == Commands.NATIVE_TRANSFER) {
-                require(data.tokens[i] == JamOrder.NATIVE_TOKEN, "INVALID_NATIVE_TOKEN_ADDRESS");
-                require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
-                if (data.receiver != operator){
-                    JamTransfer(operator).transferNativeFromContract(
-                        data.receiver, BMath.getPercentage(data.amounts[i], data.fillPercent)
-                    );
-                }
-            } else if (data.tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
-                require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
-                require(data.amounts[i] == 1, "INVALID_ERC721_AMOUNT");
-                IERC721(data.tokens[i]).safeTransferFrom(data.from, data.receiver, data.nftIds[nftsInd++]);
-            } else if (data.tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
-                require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
-                IERC1155(data.tokens[i]).safeTransferFrom(data.from, data.receiver, data.nftIds[nftsInd++], data.amounts[i], "");
-            } else {
-                revert("INVALID_TRANSFER_TYPE");
+            } else if (receiver != operator){
+                JamTransfer(operator).transferNativeFromContract(
+                    receiver, BMath.getPercentage(amounts[i], fillPercent)
+                );
             }
-            if (batchLen != 0){
-                assembly {mstore(batchTransferDetails, sub(mload(batchTransferDetails), 1))}
-            }
-        }
-        require(nftsInd == data.nftIds.length, "INVALID_NFT_IDS_LENGTH");
-        require(batchLen == batchTransferDetails.length, "INVALID_BATCH_PERMIT2_LENGTH");
-
-        if (batchLen != 0){
-            PERMIT2.transferFrom(batchTransferDetails);
         }
     }
 
-    /// @inheritdoc IJamBalanceManager
-    function transferTokensWithPermits(
-        TransferData calldata data,
-        Signature.TakerPermitsInfo calldata takerPermitsInfo
-    ) onlyOperator(msg.sender) external {
-        IPermit2.AllowanceTransferDetails[] memory batchTransferDetails;
-        IPermit2.PermitDetails[] memory batchToApprove = new IPermit2.PermitDetails[](takerPermitsInfo.noncesPermit2.length);
-        Indices memory indices = Indices(0, 0, 0, 0);
-        for (uint i; i < data.tokens.length; ++i) {
-            if (data.tokenTransferTypes[i] == Commands.SIMPLE_TRANSFER || data.tokenTransferTypes[i] == Commands.CALL_PERMIT_THEN_TRANSFER) {
-                if (data.tokenTransferTypes[i] == Commands.CALL_PERMIT_THEN_TRANSFER){
-                    permitToken(
-                        data.from, data.tokens[i], takerPermitsInfo.deadline, takerPermitsInfo.permitSignatures[indices.permitSignaturesInd++]
-                    );
-                }
-                IERC20(data.tokens[i]).safeTransferFrom(
-                    data.from, data.receiver, BMath.getPercentage(data.amounts[i], data.fillPercent)
-                );
-            } else if (data.tokenTransferTypes[i] == Commands.PERMIT2_TRANSFER || data.tokenTransferTypes[i] == Commands.CALL_PERMIT2_THEN_TRANSFER) {
-                if (data.tokenTransferTypes[i] == Commands.CALL_PERMIT2_THEN_TRANSFER){
-                    batchToApprove[indices.batchToApproveInd] = IPermit2.PermitDetails({
-                        token: data.tokens[i],
-                        amount: type(uint160).max,
-                        expiration: takerPermitsInfo.deadline,
-                        nonce: takerPermitsInfo.noncesPermit2[indices.batchToApproveInd]
-                    });
-                    ++indices.batchToApproveInd;
-                }
 
-                if (indices.batchLen == 0){
-                    batchTransferDetails = new IPermit2.AllowanceTransferDetails[](data.tokens.length - i);
-                }
-                batchTransferDetails[indices.batchLen++] = IPermit2.AllowanceTransferDetails({
-                    from: data.from,
-                    to: data.receiver,
-                    amount: SafeCast160.toUint160(BMath.getPercentage(data.amounts[i], data.fillPercent)),
-                    token: data.tokens[i]
-                });
-                continue;
-            } else if (data.tokenTransferTypes[i] == Commands.NATIVE_TRANSFER) {
-                require(data.tokens[i] == JamOrder.NATIVE_TOKEN, "INVALID_NATIVE_TOKEN_ADDRESS");
-                require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
-                if (data.receiver != operator){
-                    JamTransfer(operator).transferNativeFromContract(
-                        data.receiver, BMath.getPercentage(data.amounts[i], data.fillPercent)
-                    );
-                }
-            } else if (data.tokenTransferTypes[i] == Commands.NFT_ERC721_TRANSFER) {
-                require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
-                require(data.amounts[i] == 1, "INVALID_ERC721_AMOUNT");
-                IERC721(data.tokens[i]).safeTransferFrom(data.from, data.receiver, data.nftIds[indices.nftsInd++]);
-            } else if (data.tokenTransferTypes[i] == Commands.NFT_ERC1155_TRANSFER) {
-                require(data.fillPercent == BMath.HUNDRED_PERCENT, "INVALID_FILL_PERCENT");
-                IERC1155(data.tokens[i]).safeTransferFrom(data.from, data.receiver, data.nftIds[indices.nftsInd++], data.amounts[i], "");
-            } else {
-                revert("INVALID_TRANSFER_TYPE");
-            }
-
-            // Shortening array
-            if (indices.batchLen != 0){
-                assembly {mstore(batchTransferDetails, sub(mload(batchTransferDetails), 1))}
-            }
-        }
-        require(indices.batchToApproveInd == batchToApprove.length, "INVALID_NUMBER_OF_TOKENS_TO_APPROVE");
-        require(indices.batchLen == batchTransferDetails.length, "INVALID_BATCH_PERMIT2_LENGTH");
-        require(indices.permitSignaturesInd == takerPermitsInfo.permitSignatures.length, "INVALID_NUMBER_OF_PERMIT_SIGNATURES");
-        require(indices.nftsInd == data.nftIds.length, "INVALID_NFT_IDS_LENGTH");
-
-        if (batchToApprove.length != 0) {
-            // Update approvals for new taker's data.tokens
-            PERMIT2.permit({
-                owner: data.from,
-                permitBatch: IPermit2.PermitBatch({
-                    details: batchToApprove,
-                    spender: address(this),
-                    sigDeadline: takerPermitsInfo.deadline
-                }),
-                signature: takerPermitsInfo.signatureBytesPermit2
-            });
-        }
-
-        // Batch transfer
-        if (indices.batchLen != 0){
-            PERMIT2.transferFrom(batchTransferDetails);
-        }
-    }
-
-    /// @dev Call permit function on token contract, supports both ERC20Permit and DaiPermit formats
-    /// @param takerAddress address
-    /// @param tokenAddress address
-    /// @param deadline timestamp when the signature expires
-    /// @param permitSignature signature
-    function permitToken(
-        address takerAddress, address tokenAddress, uint deadline, bytes calldata permitSignature
-    ) private {
-        (bytes32 r, bytes32 s, uint8 v) = Signature.getRsv(permitSignature);
-
-        if (tokenAddress == DAI_TOKEN){
-            if (_chainId == 137){
-                IDaiLikePermit(tokenAddress).permit(
-                    takerAddress, address(this), IDaiLikePermit(tokenAddress).getNonce(takerAddress), deadline, true, v, r, s
-                );
-            } else {
-                IDaiLikePermit(tokenAddress).permit(
-                    takerAddress, address(this), IERC20Permit(tokenAddress).nonces(takerAddress), deadline, true, v, r, s
-                );
-            }
-        } else {
-            IERC20Permit(tokenAddress).permit(takerAddress, address(this), type(uint).max, deadline, v, r, s);
-        }
-
-    }
 }

@@ -4,22 +4,22 @@ pragma solidity ^0.8.17;
 import "forge-std/Test.sol";
 
 import "../../src/JamSolver.sol";
-import "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
+import "./utils/MERC20.sol";
 
 contract JamSolverTest is Test {
     JamSolver solverContract;
     address internal settlement;
     address internal solver;
     address internal random;
-    ERC20PresetMinterPauser internal token1;
-    ERC20PresetMinterPauser internal token2;
+    MERC20 internal token1;
+    MERC20 internal token2;
 
     function setUp() public {
         solver = address(2);
         random = address(3);
         settlement = address(4);
-        token1 = new ERC20PresetMinterPauser('token1', 'TOK1');
-        token2 = new ERC20PresetMinterPauser('token2', 'TOK2');
+        token1 = new MERC20('token1', 'TOK1');
+        token2 = new MERC20('token2', 'TOK2');
         token1.mint(address(this), 10000000);
         token2.mint(address(this), 10000000);
         vm.prank(solver);

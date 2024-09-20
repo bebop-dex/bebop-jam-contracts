@@ -1,4 +1,4 @@
-import {ethers, network} from "hardhat";
+import {ethers, network, waffle} from "hardhat";
 import {expect} from "chai";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
@@ -11,6 +11,8 @@ import {
   PERMIT2_ADDRESS,
   TOKENS
 } from "../config";
+import BebopSettlementABI from "../blend/BebopSettlement.json";
+import {BebopSettlement} from "../../../typechain-types";
 
 
 async function getFunds(walletsWithFunds: SignerWithAddress[], solverAddr: string){
@@ -49,20 +51,20 @@ async function getFunds(walletsWithFunds: SignerWithAddress[], solverAddr: strin
     method: "hardhat_impersonateAccount",
     params: [NFT_COLLECTOR],
   });
-  for (let token of Object.values(NFTS_ERC721)) {
-    const binance = await ethers.provider.getSigner(NFT_COLLECTOR);
-    let tokenContract = await ethers.getContractAt("IERC721", token.address)
-    let receiver = getReceiverAddress(token.to)
-    await tokenContract.connect(binance).transferFrom(NFT_COLLECTOR, receiver, token.id);
-    expect(await tokenContract.balanceOf(receiver)).to.equal(1);
-  }
-  for (let token of Object.values(NFTS_ERC1155)) {
-    const binance = await ethers.provider.getSigner(NFT_COLLECTOR);
-    let tokenContract = await ethers.getContractAt("IERC1155", token.address)
-    let receiver = getReceiverAddress(token.to)
-    await tokenContract.connect(binance).safeTransferFrom(NFT_COLLECTOR, receiver, token.id, token.amount, "0x");
-    expect(await tokenContract.balanceOf(receiver, token.id)).to.equal(token.amount);
-  }
+  // for (let token of Object.values(NFTS_ERC721)) {
+  //   const binance = await ethers.provider.getSigner(NFT_COLLECTOR);
+  //   let tokenContract = await ethers.getContractAt("IERC721", token.address)
+  //   let receiver = getReceiverAddress(token.to)
+  //   await tokenContract.connect(binance).transferFrom(NFT_COLLECTOR, receiver, token.id);
+  //   expect(await tokenContract.balanceOf(receiver)).to.equal(1);
+  // }
+  // for (let token of Object.values(NFTS_ERC1155)) {
+  //   const binance = await ethers.provider.getSigner(NFT_COLLECTOR);
+  //   let tokenContract = await ethers.getContractAt("IERC1155", token.address)
+  //   let receiver = getReceiverAddress(token.to)
+  //   await tokenContract.connect(binance).safeTransferFrom(NFT_COLLECTOR, receiver, token.id, token.amount, "0x");
+  //   expect(await tokenContract.balanceOf(receiver, token.id)).to.equal(token.amount);
+  // }
 }
 
 export async function getFixture () {
@@ -78,10 +80,16 @@ export async function getFixture () {
     ],
   });
 
-  const [deployer, solver, user, anotherUser, bebopMaker, directMaker, ...users] = await ethers.getSigners();
+  const [deployer, solver, executor, user, anotherUser, bebopMaker, bebopMaker2, directMaker, ...users] = await ethers.getSigners();
+
+  const bebopBlend = await waffle.deployContract(deployer, BebopSettlementABI, [
+    TOKENS.WETH,
+    PERMIT2_ADDRESS,
+    TOKENS.DAI
+  ]) as BebopSettlement;
 
   const JamSettlement = await ethers.getContractFactory("JamSettlement");
-  const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS, TOKENS.DAI);
+  const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS, bebopBlend.address);
   await settlement.deployed();
 
   const JamSolver = await ethers.getContractFactory("JamSolver");
@@ -92,24 +100,28 @@ export async function getFixture () {
   const JamBalanceManager = await ethers.getContractFactory("JamBalanceManager");
   const balanceManager = await JamBalanceManager.attach(balanceManagerAddress);
 
-  let walletsWithFunds = [user, anotherUser, bebopMaker, directMaker, solver]
+  let walletsWithFunds = [user, anotherUser, bebopMaker, bebopMaker2, directMaker, solver]
   await getFunds(walletsWithFunds, solverContract.address)
   console.log("User", user.address)
   console.log("BebopMaker", bebopMaker.address)
   console.log("DirectMaker", directMaker.address)
   console.log("SolverContract", solverContract.address)
   console.log("BalanceManager", balanceManager.address)
+  console.log("BebopBlend", bebopBlend.address)
   console.log("Settlement", settlement.address)
 
   return {
     deployer,
     solver,
+    executor,
     solverContract,
     user,
     anotherUser,
     bebopMaker,
+    bebopMaker2,
     settlement,
     balanceManager,
-    directMaker
+    directMaker,
+    bebopBlend
   }
 }

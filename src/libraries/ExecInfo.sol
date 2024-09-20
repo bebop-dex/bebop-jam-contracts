@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.27;
 
 library ExecInfo {
 
@@ -13,8 +13,8 @@ library ExecInfo {
     struct BatchSolverData {
         address balanceRecipient; // receiver of the initial tokens transfer from taker (usually it is solver contract)
         uint16[] curFillPercents; // if empty array, then all orders will be 100% filled
-        bool[] takersPermitsUsage; // indicates whether taker has permit/permit2 signature for each order
-                                  // (if empty array, then all orders without permits signatures)
+        bool[] takersPermit2; // indicates whether taker using permit2 signature or not
+                                  // (if empty array, then all orders without permit2 siagntures)
         bool transferExactAmounts; // True - if solver is planning to transfer exact amounts which are specified in order.buyAmounts
                                    // False - if solver is planning to transfer more tokens than in order.buyAmounts,
     }

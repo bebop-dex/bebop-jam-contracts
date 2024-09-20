@@ -1,5 +1,5 @@
 import {JamOrder} from "../../../typechain-types/artifacts/src/JamSettlement";
-import {NFTS_ERC1155, NFTS_ERC721, TOKENS} from "../config";
+import {AMOUNTS, AMOUNTS2, NFTS_ERC1155, NFTS_ERC721, TOKENS} from "../config";
 import {ethers} from "hardhat";
 
 
@@ -13,20 +13,6 @@ export enum Commands {
     NFT_ERC1155_TRANSFER = "06",
 }
 
-const AMOUNTS = {
-    "WETH_1": ethers.utils.parseUnits("1", 18).toString(),
-    "WETH_2": ethers.utils.parseUnits("3", 18).toString(),
-    "DAI_1": ethers.utils.parseUnits("1000", 18).toString(),
-    "USDC_1": ethers.utils.parseUnits("123", 6).toString(),
-    "WBTC_1": ethers.utils.parseUnits("0.1", 8).toString(),
-    "LINK_1": ethers.utils.parseUnits("2", 18).toString(),
-    "MKR_1": ethers.utils.parseUnits("1", 18).toString(),
-    "YFI_1": ethers.utils.parseUnits("1", 18).toString(),
-    "UNI_1": ethers.utils.parseUnits("12", 18).toString(),
-    "AAVE_1": ethers.utils.parseUnits("0.2", 18).toString(),
-    "DYDX_1": ethers.utils.parseUnits("11", 18).toString(),
-    "SNX_1": ethers.utils.parseUnits("322", 18).toString(),
-}
 
 export function getOrder(
     orderType: string,
@@ -56,8 +42,8 @@ export function getOrder(
             ...common,
             sellTokens: [TOKENS.WETH],
             buyTokens: [TOKENS.USDC],
-            sellAmounts: [AMOUNTS.WETH_1],
-            buyAmounts: [AMOUNTS.USDC_1],
+            sellAmounts: [AMOUNTS[TOKENS.WETH]],
+            buyAmounts: [AMOUNTS[TOKENS.USDC]],
             sellNFTIds: [],
             buyNFTIds: [],
         }
@@ -67,8 +53,8 @@ export function getOrder(
             ...common,
             sellTokens: [TOKENS.DAI],
             buyTokens: [TOKENS.USDC],
-            sellAmounts: [AMOUNTS.DAI_1],
-            buyAmounts: [AMOUNTS.USDC_1],
+            sellAmounts: [AMOUNTS[TOKENS.DAI]],
+            buyAmounts: [AMOUNTS[TOKENS.USDC]],
             sellNFTIds: [],
             buyNFTIds: []
         }
@@ -78,8 +64,8 @@ export function getOrder(
             ...common,
             sellTokens: [TOKENS.AAVE],
             buyTokens: [TOKENS.USDC],
-            sellAmounts: [AMOUNTS.AAVE_1],
-            buyAmounts: [AMOUNTS.USDC_1],
+            sellAmounts: [AMOUNTS[TOKENS.AAVE]],
+            buyAmounts: [AMOUNTS[TOKENS.USDC]],
             sellNFTIds: [],
             buyNFTIds: []
         }
@@ -89,8 +75,8 @@ export function getOrder(
             ...common,
             sellTokens: [TOKENS.USDC],
             buyTokens: [TOKENS.WETH],
-            sellAmounts: [AMOUNTS.USDC_1],
-            buyAmounts: [AMOUNTS.WETH_1],
+            sellAmounts: [AMOUNTS[TOKENS.USDC]],
+            buyAmounts: [AMOUNTS[TOKENS.WETH]],
             sellNFTIds: [],
             buyNFTIds: [],
         }
@@ -100,8 +86,8 @@ export function getOrder(
             ...common,
             sellTokens: [TOKENS.ETH],
             buyTokens: [TOKENS.USDC],
-            sellAmounts: [AMOUNTS.WETH_1],
-            buyAmounts: [AMOUNTS.USDC_1],
+            sellAmounts: [AMOUNTS[TOKENS.WETH]],
+            buyAmounts: [AMOUNTS[TOKENS.USDC]],
             sellNFTIds: [],
             buyNFTIds: []
         }
@@ -111,8 +97,8 @@ export function getOrder(
             ...common,
             sellTokens: [TOKENS.USDC],
             buyTokens: [TOKENS.ETH],
-            sellAmounts: [AMOUNTS.USDC_1],
-            buyAmounts: [AMOUNTS.WETH_1],
+            sellAmounts: [AMOUNTS[TOKENS.USDC]],
+            buyAmounts: [AMOUNTS[TOKENS.WETH]],
             sellNFTIds: [],
             buyNFTIds: []
         }
@@ -122,8 +108,8 @@ export function getOrder(
             ...common,
             sellTokens: [TOKENS.USDC],
             buyTokens: [TOKENS.ETH, TOKENS.WETH],
-            sellAmounts: [AMOUNTS.USDC_1],
-            buyAmounts: [AMOUNTS.WETH_1, AMOUNTS.WETH_2],
+            sellAmounts: [AMOUNTS[TOKENS.USDC]],
+            buyAmounts: [AMOUNTS[TOKENS.WETH], AMOUNTS2[TOKENS.WETH]],
             sellNFTIds: [],
             buyNFTIds: []
         }
@@ -135,7 +121,7 @@ export function getOrder(
             ...common,
             sellTokens: [TOKENS.WETH],
             buyTokens: buyTokens,
-            sellAmounts: [AMOUNTS.WETH_1],
+            sellAmounts: [AMOUNTS[TOKENS.WETH]],
             buyAmounts: [1],
             sellNFTIds: [],
             buyNFTIds: buyIds
@@ -149,7 +135,7 @@ export function getOrder(
             ...common,
             sellTokens: [TOKENS.WETH],
             buyTokens: buyTokens,
-            sellAmounts: [AMOUNTS.WETH_1],
+            sellAmounts: [AMOUNTS[TOKENS.WETH]],
             buyAmounts: buyAmounts,
             sellNFTIds: [],
             buyNFTIds: buyIds
@@ -163,7 +149,7 @@ export function getOrder(
             sellTokens: sellTokens,
             buyTokens: [TOKENS.WETH],
             sellAmounts: [1],
-            buyAmounts: [AMOUNTS.WETH_1],
+            buyAmounts: [AMOUNTS[TOKENS.WETH]],
             sellNFTIds: sellNFTIds,
             buyNFTIds: []
         }
@@ -177,7 +163,7 @@ export function getOrder(
             sellTokens: sellTokens,
             buyTokens: [TOKENS.WETH],
             sellAmounts: sellAmounts,
-            buyAmounts: [AMOUNTS.WETH_1],
+            buyAmounts: [AMOUNTS[TOKENS.WETH]],
             sellNFTIds: sellNFTIds,
             buyNFTIds: []
         }
@@ -187,8 +173,8 @@ export function getOrder(
             ...common,
             sellTokens: [TOKENS.WETH, TOKENS.LINK, TOKENS.WBTC],
             buyTokens: [TOKENS.USDC],
-            sellAmounts: [AMOUNTS.WETH_1, AMOUNTS.LINK_1, AMOUNTS.WBTC_1],
-            buyAmounts: [AMOUNTS.USDC_1],
+            sellAmounts: [AMOUNTS[TOKENS.WETH], AMOUNTS[TOKENS.LINK], AMOUNTS[TOKENS.WBTC]],
+            buyAmounts: [AMOUNTS[TOKENS.USDC]],
             sellNFTIds: [],
             buyNFTIds: []
         }
@@ -198,8 +184,8 @@ export function getOrder(
             ...common,
             buyTokens: [TOKENS.WETH, TOKENS.LINK, TOKENS.WBTC],
             sellTokens: [TOKENS.USDC],
-            buyAmounts: [AMOUNTS.WETH_1, AMOUNTS.LINK_1, AMOUNTS.WBTC_1],
-            sellAmounts: [AMOUNTS.USDC_1],
+            buyAmounts: [AMOUNTS[TOKENS.WETH], AMOUNTS[TOKENS.LINK], AMOUNTS[TOKENS.WBTC]],
+            sellAmounts: [AMOUNTS[TOKENS.USDC]],
             sellNFTIds: [],
             buyNFTIds: []
         }
@@ -209,8 +195,8 @@ export function getOrder(
             ...common,
             buyTokens: [TOKENS.SNX, TOKENS.LINK, TOKENS.WBTC],
             sellTokens: [TOKENS.DYDX],
-            buyAmounts: [AMOUNTS.SNX_1, AMOUNTS.LINK_1, AMOUNTS.WBTC_1],
-            sellAmounts: [AMOUNTS.DYDX_1],
+            buyAmounts: [AMOUNTS.SNX_1, AMOUNTS[TOKENS.LINK], AMOUNTS[TOKENS.WBTC]],
+            sellAmounts: [AMOUNTS[TOKENS.DYDX]],
             sellNFTIds: [],
             buyNFTIds: []
         }
@@ -220,8 +206,8 @@ export function getOrder(
             ...common,
             buyTokens: [TOKENS.WETH, TOKENS.LINK, TOKENS.WBTC],
             sellTokens: [TOKENS.USDC, TOKENS.YFI, TOKENS.MKR],
-            buyAmounts: [AMOUNTS.WETH_1, AMOUNTS.LINK_1, AMOUNTS.WBTC_1],
-            sellAmounts: [AMOUNTS.USDC_1, AMOUNTS.YFI_1, AMOUNTS.MKR_1],
+            buyAmounts: [AMOUNTS[TOKENS.WETH], AMOUNTS[TOKENS.LINK], AMOUNTS[TOKENS.WBTC]],
+            sellAmounts: [AMOUNTS[TOKENS.USDC], AMOUNTS[TOKENS.YFI], AMOUNTS[TOKENS.MKR]],
             sellNFTIds: [],
             buyNFTIds: []
         }
@@ -254,7 +240,7 @@ export function getOrder(
             sellTokens: [NFTS_ERC721.ens.address],
             buyTokens: [TOKENS.ETH, NFTS_ERC721.bayc.address],
             sellAmounts: [1],
-            buyAmounts: [AMOUNTS.WETH_1, 1],
+            buyAmounts: [AMOUNTS[TOKENS.WETH], 1],
             sellNFTIds: [NFTS_ERC721.ens.id],
             buyNFTIds: [NFTS_ERC721.bayc.id]
         }
@@ -264,7 +250,7 @@ export function getOrder(
             ...common,
             sellTokens: [NFTS_ERC721.bayc.address, TOKENS.WETH],
             buyTokens: [NFTS_ERC721.ens.address],
-            sellAmounts: [1, AMOUNTS.WETH_1],
+            sellAmounts: [1, AMOUNTS[TOKENS.WETH]],
             buyAmounts: [1],
             sellNFTIds: [NFTS_ERC721.bayc.id],
             buyNFTIds: [NFTS_ERC721.ens.id]
@@ -275,8 +261,8 @@ export function getOrder(
             ...common,
             sellTokens: [TOKENS.UNI, TOKENS.WETH, TOKENS.LINK, TOKENS.WBTC],
             buyTokens: [TOKENS.USDC],
-            sellAmounts: [AMOUNTS.UNI_1, AMOUNTS.WETH_1, AMOUNTS.LINK_1, AMOUNTS.WBTC_1],
-            buyAmounts: [AMOUNTS.USDC_1],
+            sellAmounts: [AMOUNTS[TOKENS.UNI], AMOUNTS[TOKENS.WETH], AMOUNTS[TOKENS.LINK], AMOUNTS[TOKENS.WBTC]],
+            buyAmounts: [AMOUNTS[TOKENS.USDC]],
             sellNFTIds: [],
             buyNFTIds: []
         }
@@ -286,8 +272,8 @@ export function getOrder(
             ...common,
             sellTokens: [TOKENS.DYDX, TOKENS.WETH, TOKENS.SNX],
             buyTokens: [TOKENS.USDC],
-            sellAmounts: [AMOUNTS.DYDX_1, AMOUNTS.WETH_1, AMOUNTS.SNX_1],
-            buyAmounts: [AMOUNTS.USDC_1],
+            sellAmounts: [AMOUNTS[TOKENS.DYDX], AMOUNTS[TOKENS.WETH], AMOUNTS.SNX_1],
+            buyAmounts: [AMOUNTS[TOKENS.USDC]],
             sellNFTIds: [],
             buyNFTIds: []
         }
