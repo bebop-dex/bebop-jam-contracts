@@ -144,6 +144,11 @@ const config: HardhatUserConfig = {
       url: 'https://rpc.ankr.com/taiko',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
       zksync: false
+    },
+    bArtio: {
+      url: 'https://bartio.rpc.berachain.com/',
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+      zksync: false
     }
   },
   etherscan: {
@@ -153,6 +158,7 @@ const config: HardhatUserConfig = {
       scroll: process.env.ETHERSCAN_API_KEY!,
       taiko: process.env.ETHERSCAN_API_KEY!,
       mode: "abc",
+      bArtio: "abc"
     },
     customChains: [
       {
@@ -185,6 +191,14 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "https://api.taikoscan.io/api",
           browserURL: "https://taikoscan.io/"
+        }
+      },
+      {
+        network: "bArtio",
+        chainId: 80084,
+        urls: {
+          apiURL: "https://api.routescan.io/v2/network/testnet/evm/80084/etherscan/api",
+          browserURL: "https://bartio.beratrail.io/"
         }
       }
     ],
