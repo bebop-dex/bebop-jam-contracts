@@ -1,13 +1,12 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.27;
 
 import "../base/Errors.sol";
 import "../libraries/JamOrder.sol";
 import "../libraries/JamHooks.sol";
-import "../libraries/common/BMath.sol";
 import "@openzeppelin/contracts/interfaces/IERC1271.sol";
 
-/// @title JamSigning
+/// @title JamValidation
 /// @notice Functions which handles the signing and validation of Jam orders
 abstract contract JamValidation {
     mapping(address => mapping(uint256 => uint256)) private standardNonces;
@@ -15,7 +14,7 @@ abstract contract JamValidation {
     uint256 private constant INF_EXPIRY = 9999999999; // expiry for limit orders
 
     bytes32 private constant DOMAIN_NAME = keccak256("JamSettlement");
-    bytes32 private constant DOMAIN_VERSION = keccak256("1");
+    bytes32 private constant DOMAIN_VERSION = keccak256("2");
     bytes32 private constant UPPER_BIT_MASK = (0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
     bytes4 private constant EIP1271_MAGICVALUE = bytes4(keccak256("isValidSignature(bytes32,bytes)"));
     bytes32 public constant EIP712_DOMAIN_TYPEHASH = keccak256(abi.encodePacked(
@@ -24,6 +23,7 @@ abstract contract JamValidation {
 
     bytes32 private immutable _CACHED_DOMAIN_SEPARATOR;
     uint256 private immutable _CACHED_CHAIN_ID;
+    using JamOrderLib for JamOrder;
 
     constructor(){
         _CACHED_CHAIN_ID = block.chainid;
@@ -72,31 +72,18 @@ abstract contract JamValidation {
         }
     }
 
+    /// @notice Hash hooks and return the hash
+    /// @param hooks The hooks to hash
     function hashHooks(JamHooks.Def calldata hooks) external pure returns (bytes32) {
         return JamHooks.hash(hooks);
     }
 
-
-    function validateOrder(
-        JamOrder.Data calldata order, bytes calldata signature, bytes32 hooksHash, uint16 curFillPercent, bool usingPermit2
-    ) internal {
-        // Allow settle from user without sig; For permit2 case, we already validated witness during the transfer
-        if (order.taker != msg.sender && !usingPermit2) {
-            bytes32 orderHash = keccak256(abi.encodePacked(
-                "\x19\x01", DOMAIN_SEPARATOR(), JamOrder.hash(order, hooksHash)
-            ));
-            validateSignature(order.taker, orderHash, signature);
-        }
-        require(order.executor == msg.sender || order.executor == address(0), InvalidExecutor());
-        require(order.buyTokens.length == order.buyAmounts.length, BuyTokensInvalidLength());
-//        require(order.buyTokens.length == order.buyTokenTransfers.length, "INVALID_BUY_TRANSFERS_LENGTH");
-        require(order.sellTokens.length == order.sellAmounts.length, SellTokensInvalidLength());
-//        require(order.sellTokens.length == order.sellTokenTransfers.length, "INVALID_SELL_TRANSFERS_LENGTH");
-        require(curFillPercent >= order.minFillPercent, FillPercentTooLow());
-        invalidateOrderNonce(order.taker, order.nonce, order.expiry == INF_EXPIRY);
-        require(block.timestamp < order.expiry, OrderExpired());
+    /// @notice Hash Jam order and return the hash
+    /// @param order The order to hash
+    /// @param hooksHash The hash of the hooks to include in the order hash
+    function hashJamOrder(JamOrder calldata order, bytes32 hooksHash) external pure returns (bytes32) {
+        return order.hash(hooksHash);
     }
-
 
     /// @notice Cancel limit order by invalidating nonce for the sender address
     /// @param nonce The nonce to invalidate
@@ -114,6 +101,26 @@ abstract contract JamValidation {
         return (limitOrdersNonces[taker][invalidatorSlot] & invalidatorBit) == 0;
     }
 
+    /// @notice Validate order data and in case of standard approvals validate the signature
+    /// @param order The order to validate
+    /// @param signature The signature to validate
+    /// @param hooksHash The hash of the hooks to include in the order hash
+    function validateOrder(JamOrder calldata order, bytes calldata signature, bytes32 hooksHash) internal {
+        // Allow settle from user without sig; For permit2 case, we already validated witness during the transfer
+        if (order.taker != msg.sender && !order.usingPermit2) {
+            bytes32 orderHash = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), order.hash(hooksHash)));
+            validateSignature(order.taker, orderHash, signature);
+        }
+        require(
+            order.executor == msg.sender || order.executor == address(0) || block.timestamp > order.exclusivityDeadline,
+            InvalidExecutor()
+        );
+        require(order.buyTokens.length == order.buyAmounts.length, BuyTokensInvalidLength());
+        require(order.sellTokens.length == order.sellAmounts.length, SellTokensInvalidLength());
+        invalidateOrderNonce(order.taker, order.nonce, order.expiry == INF_EXPIRY);
+        require(block.timestamp < order.expiry, OrderExpired());
+    }
+
     /// @notice Check if nonce is valid and invalidate it
     /// @param taker address
     /// @param nonce The nonce to invalidate
@@ -128,44 +135,36 @@ abstract contract JamValidation {
         invalidNonces[invalidatorSlot] = invalidator | invalidatorBit;
     }
 
-    /// @notice validate if increased amounts are more than initial amounts that user signed
-    /// @param increasedAmounts The increased amounts to validate (if empty, return initial amounts)
+    /// @notice validate if filled amounts are more than initial amounts that user signed
+    /// @param filledAmounts The increased amounts to validate (if empty, return initial amounts)
     /// @param initialAmounts The initial amounts to validate against
-    /// @return The increased amounts if exist, otherwise the initial amounts
-    function validateIncreasedAmounts(
-        uint256[] calldata increasedAmounts, uint256[] calldata initialAmounts
+    /// @return The filled amounts if exist, otherwise the initial amounts
+    function validateFilledAmounts(
+        uint256[] calldata filledAmounts, uint256[] calldata initialAmounts
     ) internal pure returns (uint256[] calldata){
-        if (increasedAmounts.length == 0) {
+        if (filledAmounts.length == 0) {
             return initialAmounts;
         }
-        require(increasedAmounts.length == initialAmounts.length, InvalidIncreasedAmountsLength());
-        for (uint256 i; i < increasedAmounts.length; ++i) {
-            require(increasedAmounts[i] >= initialAmounts[i], InvalidIncreasedAmounts());
+        require(filledAmounts.length == initialAmounts.length, InvalidFilledAmountsLength());
+        for (uint256 i; i < filledAmounts.length; ++i) {
+            require(filledAmounts[i] >= initialAmounts[i], InvalidFilledAmounts());
         }
-        return increasedAmounts;
+        return filledAmounts;
     }
 
-
+    /// @notice Validate batch data and all orders in a batch
+    /// @param orders The orders to validate
+    /// @param hooks The array of hooks corresponding to each order, or empty array if no hooks
+    /// @param signatures The signatures corresponding to each order
     function validateBatchOrders(
-        JamOrder.Data[] calldata orders, JamHooks.Def[] calldata hooks, bytes[] calldata signatures,
-        bool[] calldata takersPermit2, uint16[] calldata curFillPercents
+        JamOrder[] calldata orders, JamHooks.Def[] calldata hooks, bytes[] calldata signatures
     ) internal {
-        bool isMaxFill = curFillPercents.length == 0;
         bool noHooks = hooks.length == 0;
-        bool allTakersWithoutPermit2 = takersPermit2.length == 0;
         require(orders.length == signatures.length, InvalidBatchSignaturesLength());
-        require(orders.length == takersPermit2.length || allTakersWithoutPermit2, InvalidBatchPermitsLength());
         require(orders.length == hooks.length || noHooks, InvalidBatchHooksLength());
-        require(orders.length == curFillPercents.length || isMaxFill, InvalidBatchFillPercentsLength());
         for (uint i; i < orders.length; ++i) {
             require(orders[i].receiver != address(this), InvalidReceiverInBatch());
-            validateOrder(
-                orders[i],
-                signatures[i],
-                noHooks ? JamHooks.EMPTY_HOOKS_HASH : JamHooks.hash(hooks[i]),
-                isMaxFill ? BMath.HUNDRED_PERCENT : curFillPercents[i],
-                allTakersWithoutPermit2 ? false : takersPermit2[i]
-            );
+            validateOrder(orders[i], signatures[i], noHooks ? JamHooks.EMPTY_HOOKS_HASH : JamHooks.hash(hooks[i]));
         }
     }
 }

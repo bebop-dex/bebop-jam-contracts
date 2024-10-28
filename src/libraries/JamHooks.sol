@@ -15,7 +15,7 @@ library JamHooks {
         JamInteraction.Data[] afterSettle;
     }
 
-    function hash(Def calldata hooks) internal pure returns (bytes32) {
+    function hash(Def memory hooks) internal pure returns (bytes32) {
         if (hooks.afterSettle.length == 0 && hooks.beforeSettle.length == 0){
             return EMPTY_HOOKS_HASH;
         }

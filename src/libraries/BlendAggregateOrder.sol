@@ -23,7 +23,7 @@ struct BlendAggregateOrder {
 library BlendAggregateOrderLib {
 
     bytes internal constant ORDER_TYPE = abi.encodePacked(
-        "AggregateOrder(uint64 partner_id,uint256 expiry,address taker_address,address[] maker_addresses,uint256[] maker_nonces,address[][] taker_tokens,address[][] maker_tokens,uint256[][] taker_amounts,uint256[][] maker_amounts,address receiver,bytes commands)"
+        "AggregateOrder(uint64 partner_id,uint256 expiry,address taker_address,address[] maker_addresses,uint256[] maker_nonces,address[][] taker_tokens,address[][] maker_tokens,uint256[][] taker_amounts,uint256[][] maker_amounts,address receiver,bytes commands,bytes32 hooksHash)"
     );
     bytes32 internal constant ORDER_TYPE_HASH = keccak256(ORDER_TYPE);
     string internal constant PERMIT2_ORDER_TYPE = string(
@@ -36,7 +36,7 @@ library BlendAggregateOrderLib {
     /// @param updatedMakerNonces nonce that taker signed
     /// @return the eip-712 order hash
     function hash(
-        BlendAggregateOrder memory order, uint256[][] memory updatedMakerAmounts, uint256[] memory updatedMakerNonces
+        BlendAggregateOrder memory order, uint256[][] memory updatedMakerAmounts, uint256[] memory updatedMakerNonces, bytes32 hooksHash
     ) internal pure returns (bytes32) {
         uint64 partnerId = uint64(order.flags >> 64);
         return keccak256(
@@ -45,7 +45,7 @@ library BlendAggregateOrderLib {
                 keccak256(abi.encodePacked(order.maker_addresses)), keccak256(abi.encodePacked(updatedMakerNonces)),
                 keccak256(_encodeTightlyPackedNested(order.taker_tokens)), keccak256(_encodeTightlyPackedNested(order.maker_tokens)),
                 keccak256(_encodeTightlyPackedNestedInt(order.taker_amounts)), keccak256(_encodeTightlyPackedNestedInt(updatedMakerAmounts)),
-                order.receiver, keccak256(order.commands)
+                order.receiver, keccak256(order.commands), hooksHash
             )
         );
     }

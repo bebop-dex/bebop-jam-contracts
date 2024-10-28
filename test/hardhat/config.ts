@@ -19,6 +19,7 @@ export const TOKENS = {
 
 export const AMOUNTS = {
     [TOKENS.WETH]: ethers.utils.parseUnits("1", 18).toString(),
+    [TOKENS.ETH]: ethers.utils.parseUnits("1", 18).toString(),
     [TOKENS.DAI]: ethers.utils.parseUnits("1000", 18).toString(),
     [TOKENS.USDC]: ethers.utils.parseUnits("123", 6).toString(),
     [TOKENS.USDT]: ethers.utils.parseUnits("120", 6).toString(),
@@ -36,50 +37,9 @@ Object.entries(AMOUNTS).forEach(([token, amount]) => {
     AMOUNTS2[token] = (BigInt(amount) * BigInt(2)).toString();
 });
 
-export const NFTS_ERC721 = {
-    "bayc": {
-        "to": "solver",
-        "address": "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D",
-        "id": 848
-    },
-    "coolcats": {
-        "to": "taker",
-        "address": "0x1A92f7381B9F03921564a437210bB9396471050C",
-        "id": 4247
-    },
-    "ens": {
-        "to": "maker",
-        "address": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
-        "id": "114216472655894305947166308178921433071872633673493672484331688528898546248521"
-    }
-
-}
-
-export const NFTS_ERC1155 = {
-    "opensea": {
-        "to": "solver",
-        "address": "0x495f947276749Ce646f68AC8c248420045cb7b5e",
-        "id": "5013177283398590222279544863910203618869221655136791579052742559679025088160",
-        "amount": 2
-    },
-    "rtfkt": {
-        "to": "taker",
-        "address": "0x6d4bbC0387dD4759EEe30f6A482AC6dC2Df3Facf",
-        "id": "1",
-        "amount": 1
-    },
-    "ronin": {
-        "to": "maker",
-        "address": "0x497a9A79e82e6fC0FF10a16f6F75e6fcd5aE65a8",
-        "id": "4501",
-        "amount": 1
-    }
-}
-
 export const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
 export const PERMIT2_ADDRESS = "0x000000000022d473030f116ddee9f6b43ac78ba3"
 export const BINANCE_ADDRESS = "0x28C6c06298d514Db089934071355E5743bf21d60"
-export const NFT_COLLECTOR = "0x54BE3a794282C030b15E43aE2bB182E14c409C5e"
 
 export const ETH_RPC = "https://rpc.ankr.com/eth"
 export const ETH_FOR_BLOCK = 17719907

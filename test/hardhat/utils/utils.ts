@@ -1,10 +1,9 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {JamOrder, JamSettlement, Signature} from "../../../typechain-types/artifacts/src/JamSettlement";
-import {BigNumber, BigNumberish, BytesLike, Contract, Signer} from "ethers";
-import {Commands} from "./jamOrders";
+import {BigNumber, BigNumberish, utils} from "ethers";
 import {ethers} from "hardhat";
 import {expect} from "chai";
-import {NATIVE_TOKEN, PERMIT2_ADDRESS, TOKENS} from "../config";
+import {NATIVE_TOKEN} from "../config";
+import {JamHooks, JamOrderStruct} from "../../../typechain-types/artifacts/src/JamSettlement";
 
 
 export function generateExpiry(){
@@ -50,7 +49,7 @@ export async function verifyBalancesAfter(
     solverAddress: string,
     usingSolverContract: boolean,
     amounts: BigNumberish[],
-    solverExcess: BigNumberish,
+    excess: BigNumberish,
     userBalancesBefore: {[id:string]: BigNumberish},
     solverBalancesBefore: {[id:string]: BigNumberish},
     internalSettle: boolean,
@@ -68,19 +67,19 @@ export async function verifyBalancesAfter(
             userBalanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(receiver)
             solverBalanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(solverAddress)
             if (usingSolverContract){
-                expect(solverBalanceAfter.sub(solverBalancesBefore[token])).to.be.equal(solverExcess)
+                expect(solverBalanceAfter.sub(solverBalancesBefore[token])).to.be.equal(excess)
             }
         }
         if (receiver === settlementAddr) {
             expect(userBalanceAfter.sub(userBalancesBefore[token])).to.be.equal(BigNumber.from(0))
         } else {
-            expect(userBalanceAfter.sub(userBalancesBefore[token])).to.be.equal(BigNumber.from(amounts[i]).add(takerGetExcess ? solverExcess : 0))
+            expect(userBalanceAfter.sub(userBalancesBefore[token])).to.be.equal(BigNumber.from(amounts[i]).add(takerGetExcess ? excess : 0))
         }
     }
 }
 
 export async function getBatchBalancesBefore(
-    jamOrders: JamOrder.DataStruct[], solverAddress: string
+    jamOrders: JamOrderStruct[], solverAddress: string
 ): Promise<{[id:string]: {[id:string]: BigNumberish}}> {
     // todo: allow verifying balances if taker has two reversed orders, e.g. USDC->WETH and WETH->USDC
     let allBalancesBefore: {[id:string]: {[id:string]: BigNumberish}} = {};
@@ -123,40 +122,45 @@ export async function batchVerifyBalancesAfter(
 }
 
 
-export function getBatchArrays(orders: JamOrder.DataStruct[], curFillPercents: BigNumberish[],takerExcess: BigNumberish): [BigNumberish[], string[], BigNumberish[], string] {
+export function getBatchArrays(orders: JamOrderStruct[], takerExcess: BigNumberish): [BigNumberish[], string[]] {
     let batchAmounts: BigNumberish[] = []
     let batchAddresses: string[] = []
-    let batchNftIds: BigNumberish[] = []
-    let batchTokenTransfers: string = "0x"
     for (let [ind, order] of orders.entries()) {
         for (let i=0; i < order.buyAmounts.length; i++) {
-            batchAmounts.push(BigNumber.from(order.buyAmounts[i])
-                .mul(curFillPercents.length === 0 ? 10000 : curFillPercents[ind]).div(10000).add(takerExcess))
+            batchAmounts.push(BigNumber.from(order.buyAmounts[i]).add(takerExcess))
         }
-
         batchAddresses.push(...order.buyTokens)
-        batchNftIds.push(...order.buyNFTIds)
-        batchTokenTransfers += order.buyTokenTransfers.toString().slice(2)
     }
-    return [batchAmounts, batchAddresses, batchNftIds, batchTokenTransfers]
+    return [batchAmounts, batchAddresses]
 
 }
 
-export function getAggregatedAmounts(orders: JamOrder.DataStruct[], fillPercents: BigNumberish[]): {[id: string]: {[id: string]: BigNumberish}}  {
+export function getAggregatedAmounts(orders: JamOrderStruct[]): {[id: string]: {[id: string]: BigNumberish}}  {
     let takersTokensAmounts: {[id: string]: {[id: string]: BigNumberish}} = {}
     for (let [ind, order] of orders.entries()) {
         if (takersTokensAmounts[order.receiver] === undefined) {
             takersTokensAmounts[order.receiver] = {}
         }
-        for (let i=0; i < order.buyTokens.length; i++) {
+        for (let i= 0; i < order.buyTokens.length; i++) {
             if (takersTokensAmounts[order.receiver][order.buyTokens[i]] === undefined) {
                 takersTokensAmounts[order.receiver][order.buyTokens[i]] = BigNumber.from(0)
             }
             takersTokensAmounts[order.receiver][order.buyTokens[i]] =
-                BigNumber.from(takersTokensAmounts[order.receiver][order.buyTokens[i]])
-                    .add(BigNumber.from(order.buyAmounts[i]).mul(fillPercents.length === 0 ? 10000 : fillPercents[ind]).div(10000))
+                BigNumber.from(takersTokensAmounts[order.receiver][order.buyTokens[i]]).add(BigNumber.from(order.buyAmounts[i]));
         }
     }
     return takersTokensAmounts
 
+}
+
+export function encodeHooks(
+    hooks: JamHooks.DefStruct
+){
+    return utils.defaultAbiCoder.encode(
+        [
+            "((bool,address,uint256,bytes)[],(bool,address,uint256,bytes)[])",
+        ], [
+            [hooks.beforeSettle.map(x => [x.result, x.to, x.value, x.data]), hooks.afterSettle.map(x => [x.result, x.to, x.value, x.data])]
+        ]
+    )
 }

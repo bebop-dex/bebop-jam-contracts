@@ -8,9 +8,6 @@ error InvalidOutputBalance(address token, uint256 expected, uint256 actual);
 /// @notice Thrown when sending ETH via call fails
 error FailedToSendEth();
 
-/// @notice Thrown when fill percentage is different for same token during batchSettle
-error InvalidFillPercentForSameToken();
-
 /// @notice Thrown when the passed in signature is not a valid length
 error InvalidSignatureLength();
 
@@ -32,12 +29,6 @@ error SellTokensInvalidLength();
 /// @notice Thrown when length of buy tokens and buy amounts are not equal
 error BuyTokensInvalidLength();
 
-/// @notice Thrown when fill percentage is lower than minimum fill percentage
-error FillPercentTooLow();
-
-/// @notice Thrown when fill percentage is not 100% for native token
-error InvalidFillPercentForNative();
-
 /// @notice Thrown when order is expired
 error OrderExpired();
 
@@ -47,23 +38,17 @@ error InvalidNonce();
 /// @notice Thrown when nonce is zero
 error ZeroNonce();
 
-/// @notice Thrown when length of increased amounts is not equal to tokens length
-error InvalidIncreasedAmountsLength();
+/// @notice Thrown when length of filled amounts is not equal to tokens length
+error InvalidFilledAmountsLength();
 
-/// @notice Thrown when increased amounts is less than previous amount
-error InvalidIncreasedAmounts();
+/// @notice Thrown when filled amounts is less than previous amount
+error InvalidFilledAmounts();
 
 /// @notice Thrown when length of signatures array is not equal to batch length
 error InvalidBatchSignaturesLength();
 
-/// @notice Thrown when length of PermitsUsage array is not equal to batch length
-error InvalidBatchPermitsLength();
-
 /// @notice Thrown when length of hooks array is not equal to batch length
 error InvalidBatchHooksLength();
-
-/// @notice Thrown when length of fills array is not equal to batch length
-error InvalidBatchFillPercentsLength();
 
 /// @notice Thrown when one of the orders in batch has settlement contract as receiver
 error InvalidReceiverInBatch();
@@ -82,3 +67,9 @@ error AfterSettleHooksFailed();
 
 /// @notice Thrown for unknown blend order type
 error InvalidBlendOrderType();
+
+/// @notice Thrown when invalid fee percentage is passed
+error InvalidFeePercentage();
+
+/// @notice Thrown when interactions contain call to balance manager
+error CallToBalanceManagerNotAllowed();

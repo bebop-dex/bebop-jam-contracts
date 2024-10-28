@@ -1,4 +1,4 @@
-import {JamInteraction, JamOrder} from "../../../typechain-types/artifacts/src/JamSettlement";
+import {JamInteraction, JamOrderStruct} from "../../../typechain-types/artifacts/src/JamSettlement";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers} from "hardhat";
 import {BigNumber, utils} from "ethers";
@@ -9,13 +9,13 @@ import {
     BlendMultiOrderStruct,
     BlendSingleOrderStruct
 } from "../../../typechain-types/artifacts/src/interfaces/IBebopBlend";
-import {BlendCommand, getSingleOrder} from "./blendUtils";
+import {BlendCommand, getMultiOrder, getSingleOrder} from "./blendUtils";
 import {makerSignBlendOrder} from "../signing/signBebopBlend";
 
 
 
 export async function getBebopSolverCalls(
-    jamOrder: JamOrder.DataStruct,
+    jamOrder: JamOrderStruct,
     bebop: BebopSettlement,
     takerAddress: string,
     maker: SignerWithAddress,
@@ -72,8 +72,16 @@ export async function getBebopSolverCalls(
             0
         )
     } else {
-        // MultiOrder
-        throw Error("Not implemented")
+        const multiOrder: BlendMultiOrderStruct = getMultiOrder(
+            taker_tokens, maker_tokens, taker_amounts, maker_amounts,
+            taker_address, maker_address, takerCommands, makerCommands
+        )
+        const makerSignature = await makerSignBlendOrder(maker, multiOrder, bebop.address)
+        settleTx = await bebop.populateTransaction.swapMulti(
+            multiOrder,
+            { flags: 0, signatureBytes: makerSignature},
+            0
+        )
     }
     for (let i = 0; i < maker_tokens.length; i++){
         let tokenContract = await ethers.getContractAt("IERC20", maker_tokens[i])

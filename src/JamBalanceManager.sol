@@ -4,7 +4,6 @@ pragma solidity ^0.8.27;
 import "./base/JamTransfer.sol";
 import "./interfaces/IJamBalanceManager.sol";
 import "./interfaces/IPermit2.sol";
-import "./libraries/common/BMath.sol";
 
 /// @title JamBalanceManager
 /// @notice The reason a balance manager exists is to prevent interaction to the settlement contract draining user funds
@@ -12,19 +11,18 @@ import "./libraries/common/BMath.sol";
 contract JamBalanceManager is IJamBalanceManager {
 
     using SafeTransferLib for IERC20;
+    using JamOrderLib for JamOrder;
     using BlendSingleOrderLib for BlendSingleOrder;
     using BlendMultiOrderLib for BlendMultiOrder;
     using BlendAggregateOrderLib for BlendAggregateOrder;
 
     address private immutable operator;
     IPermit2 private immutable PERMIT2;
-    uint256 private immutable _chainId;
 
     constructor(address _operator, address _permit2) {
         // Operator can be defined at creation time with `msg.sender`
         // Pass in the settlement - and that can be the only caller.
         operator = _operator;
-        _chainId = block.chainid;
         PERMIT2 = IPermit2(_permit2);
     }
 
@@ -33,11 +31,46 @@ contract JamBalanceManager is IJamBalanceManager {
         _;
     }
 
+    /// @inheritdoc IJamBalanceManager
+    function transferTokensWithPermit2(
+        JamOrder calldata order,
+        bytes calldata signature,
+        bytes32 hooksHash,
+        address receiver
+    ) onlyOperator(msg.sender) external {
+        PERMIT2.permitWitnessTransferFrom(
+            order.toBatchPermit2(),
+            order.toSignatureTransferDetails(receiver),
+            order.taker,
+            order.hash(hooksHash),
+            JamOrderLib.PERMIT2_ORDER_TYPE,
+            signature
+        );
+    }
+
+    /// @inheritdoc IJamBalanceManager
+    function transferTokens(
+        address[] calldata tokens,
+        uint256[] calldata amounts,
+        address sender,
+        address receiver
+    ) onlyOperator(msg.sender) external {
+        for (uint i; i < tokens.length; ++i){
+            if (tokens[i] != JamOrderLib.NATIVE_TOKEN){
+                IERC20(tokens[i]).safeTransferFrom(sender, receiver, amounts[i]);
+            } else if (receiver != operator){
+                JamTransfer(operator).transferNativeFromContract(receiver, amounts[i]);
+            }
+        }
+    }
+
+    /// @inheritdoc IJamBalanceManager
     function transferTokenForBlendSingleOrder(
         BlendSingleOrder memory order,
         IBebopBlend.OldSingleQuote memory oldSingleQuote,
         bytes memory takerSignature,
-        address takerAddress
+        address takerAddress,
+        bytes32 hooksHash
     ) onlyOperator(msg.sender) external {
         PERMIT2.permitWitnessTransferFrom(
             IPermit2.PermitTransferFrom(
@@ -45,82 +78,47 @@ contract JamBalanceManager is IJamBalanceManager {
             ),
             IPermit2.SignatureTransferDetails(operator, order.taker_amount),
             takerAddress,
-            order.hash(oldSingleQuote.makerAmount, oldSingleQuote.makerNonce),
+            order.hash(oldSingleQuote.makerAmount, oldSingleQuote.makerNonce, hooksHash),
             BlendSingleOrderLib.PERMIT2_ORDER_TYPE,
             takerSignature
         );
     }
 
+    /// @inheritdoc IJamBalanceManager
     function transferTokensForMultiBebopOrder(
         BlendMultiOrder memory order,
         IBebopBlend.OldMultiQuote memory oldMultiQuote,
         bytes memory takerSignature,
-        address takerAddress
+        address takerAddress,
+        bytes32 hooksHash
     ) onlyOperator(msg.sender) external {
         PERMIT2.permitWitnessTransferFrom(
             order.toBatchPermit2(),
             order.toSignatureTransferDetails(operator),
             takerAddress,
-            order.hash(oldMultiQuote.makerAmounts, oldMultiQuote.makerNonce),
+            order.hash(oldMultiQuote.makerAmounts, oldMultiQuote.makerNonce, hooksHash),
             BlendMultiOrderLib.PERMIT2_ORDER_TYPE,
             takerSignature
         );
     }
 
+    /// @inheritdoc IJamBalanceManager
     function transferTokensForAggregateBebopOrder(
         BlendAggregateOrder memory order,
         IBebopBlend.OldAggregateQuote memory oldAggregateQuote,
         bytes memory takerSignature,
-        address takerAddress
+        address takerAddress,
+        bytes32 hooksHash
     ) onlyOperator(msg.sender) external {
         (address[] memory tokens, uint256[] memory amounts) = order.unpackTokensAndAmounts();
         PERMIT2.permitWitnessTransferFrom(
             order.toBatchPermit2(tokens, amounts),
             BlendAggregateOrderLib.toSignatureTransferDetails(amounts, operator),
             takerAddress,
-            order.hash(oldAggregateQuote.makerAmounts, oldAggregateQuote.makerNonces),
+            order.hash(oldAggregateQuote.makerAmounts, oldAggregateQuote.makerNonces, hooksHash),
             BlendAggregateOrderLib.PERMIT2_ORDER_TYPE,
             takerSignature
         );
     }
-
-    function transferTokensWithPermit2(
-        JamOrder.Data calldata order,
-        bytes calldata signature,
-        bytes32 hooksHash,
-        address receiver,
-        uint16 fillPercent
-    ) onlyOperator(msg.sender) external {
-        PERMIT2.permitWitnessTransferFrom(
-            JamOrder.toBatchPermit2(order),
-            JamOrder.toSignatureTransferDetails(order, receiver, fillPercent),
-            order.taker,
-            JamOrder.hash(order, hooksHash),
-            JamOrder.PERMIT2_ORDER_TYPE,
-            signature
-        );
-    }
-
-    function transferTokens(
-        address[] calldata tokens,
-        uint256[] calldata amounts,
-        address sender,
-        address receiver,
-        uint16 fillPercent
-    ) onlyOperator(msg.sender) external {
-        for (uint i; i < tokens.length; ++i){
-            if (tokens[i] != JamOrder.NATIVE_TOKEN){
-                require(fillPercent == BMath.HUNDRED_PERCENT, InvalidFillPercentForNative());
-                IERC20(tokens[i]).safeTransferFrom(
-                    sender, receiver, BMath.getPercentage(amounts[i], fillPercent)
-                );
-            } else if (receiver != operator){
-                JamTransfer(operator).transferNativeFromContract(
-                    receiver, BMath.getPercentage(amounts[i], fillPercent)
-                );
-            }
-        }
-    }
-
 
 }

@@ -1,7 +1,7 @@
 import {
-    BlendSingleOrderStruct,
+    BlendAggregateOrderStruct,
     BlendMultiOrderStruct,
-    BlendAggregateOrderStruct
+    BlendSingleOrderStruct
 } from "../../../typechain-types/artifacts/src/interfaces/IBebopBlend";
 import {generateExpiry} from "../utils/utils";
 import {AMOUNTS, AMOUNTS2, TOKENS} from "../config";
@@ -25,6 +25,34 @@ export function getSingleBlendOrder(
             maker_amount: AMOUNTS[TOKENS.DAI],
             receiver: userAddress,
             packed_commands: 0,
+            flags: generateTakerFlags(0, partnerId)
+        }
+    } else if (orderName === "SimpleERC20Permit") {
+        order = {
+            expiry: generateExpiry(),
+            taker_address: jamSettlement,
+            maker_address: makerAddress,
+            maker_nonce: nonce,
+            taker_token: TOKENS.USDC,
+            maker_token: TOKENS.USDT,
+            taker_amount: AMOUNTS[TOKENS.USDC],
+            maker_amount: AMOUNTS[TOKENS.USDT],
+            receiver: userAddress,
+            packed_commands: 0,
+            flags: generateTakerFlags(0 , partnerId)
+        }
+    } else if (orderName === "NativeToJamSettlement") {
+        order = {
+            expiry: generateExpiry(),
+            taker_address: jamSettlement,
+            maker_address: makerAddress,
+            maker_nonce: nonce,
+            taker_token: TOKENS.USDC,
+            maker_token: TOKENS.WETH,
+            taker_amount: AMOUNTS[TOKENS.USDC],
+            maker_amount: AMOUNTS[TOKENS.WETH],
+            receiver: jamSettlement,
+            packed_commands: 2, // that means maker has native token
             flags: generateTakerFlags(0 , partnerId)
         }
     } else {
@@ -124,6 +152,22 @@ export function getAggregateBlendOrder(
             commands: "0x",
             flags: generateTakerFlags(0, partnerId)
         }
+    } else if (orderName === "One-to-Many with native token") {
+        order = {
+            expiry: generateExpiry(),
+            taker_address: jamSettlement,
+            maker_addresses: makerAddresses,
+            maker_nonces: nonces,
+            taker_tokens: [[TOKENS.USDT], [TOKENS.USDT]],
+            maker_tokens: [[TOKENS.WETH, TOKENS.USDC], [TOKENS.WETH]],
+            taker_amounts: [[AMOUNTS[TOKENS.USDT]], [AMOUNTS[TOKENS.USDT]]],
+            maker_amounts: [[AMOUNTS2[TOKENS.WETH], AMOUNTS[TOKENS.USDC]], [AMOUNTS[TOKENS.WETH]]],
+            receiver: userAddress,
+            commands: "0x",
+            flags: generateTakerFlags(0, partnerId)
+        }
+        takerTransfersTypes = [[BlendCommand.SIMPLE_TRANSFER], [BlendCommand.SIMPLE_TRANSFER]]
+        makerTransfersTypes = [[BlendCommand.NATIVE_TRANSFER, BlendCommand.SIMPLE_TRANSFER], [BlendCommand.NATIVE_TRANSFER]]
     } else if (orderName === "Many-to-One") {
         order = {
             expiry: generateExpiry(),
@@ -139,6 +183,7 @@ export function getAggregateBlendOrder(
             flags: generateTakerFlags(0, partnerId)
         }
     } else if (orderName === "One-to-One with extra hop") {
+        // WETH -> UNI trade (USDC is middle token)
         order = {
             expiry: generateExpiry(),
             taker_address: jamSettlement,
@@ -154,6 +199,40 @@ export function getAggregateBlendOrder(
         }
         takerTransfersTypes = [[BlendCommand.SIMPLE_TRANSFER], [BlendCommand.TRANSFER_FROM_CONTRACT]]
         makerTransfersTypes = [[BlendCommand.TRANSFER_TO_CONTRACT], [BlendCommand.SIMPLE_TRANSFER]]
+    } else if (orderName === "One-to-One with 3 makers") {
+        // WETH -> UNI trade (USDC is middle token)
+        order = {
+            expiry: generateExpiry(),
+            taker_address: jamSettlement,
+            maker_addresses: makerAddresses,
+            maker_nonces: nonces,
+            taker_tokens: [[TOKENS.WETH], [TOKENS.USDC], [TOKENS.USDC]],
+            maker_tokens: [[TOKENS.UNI, TOKENS.USDC], [TOKENS.UNI], [TOKENS.UNI]],
+            taker_amounts: [[AMOUNTS[TOKENS.WETH]], [AMOUNTS[TOKENS.USDC]], [AMOUNTS[TOKENS.USDC]]],
+            maker_amounts: [[AMOUNTS[TOKENS.UNI], AMOUNTS2[TOKENS.USDC]], [AMOUNTS[TOKENS.UNI]], [AMOUNTS[TOKENS.UNI]]],
+            receiver: userAddress,
+            commands: "0x",
+            flags: generateTakerFlags(0, partnerId)
+        }
+        takerTransfersTypes = [[BlendCommand.SIMPLE_TRANSFER], [BlendCommand.TRANSFER_FROM_CONTRACT], [BlendCommand.TRANSFER_FROM_CONTRACT]]
+        makerTransfersTypes = [[BlendCommand.SIMPLE_TRANSFER, BlendCommand.TRANSFER_TO_CONTRACT], [BlendCommand.SIMPLE_TRANSFER], [BlendCommand.SIMPLE_TRANSFER]]
+    } else if ("Many-to-One 3 makers with hop"){
+        // WETH, USDT -> UNI trade (USDC is middle token)
+        order = {
+            expiry: generateExpiry(),
+            taker_address: jamSettlement,
+            maker_addresses: makerAddresses,
+            maker_nonces: nonces,
+            taker_tokens: [[TOKENS.WETH, TOKENS.USDT], [TOKENS.WETH], [TOKENS.USDT, TOKENS.USDC]],
+            maker_tokens: [ [TOKENS.UNI], [TOKENS.USDC], [TOKENS.UNI]],
+            taker_amounts: [[AMOUNTS[TOKENS.WETH]], [AMOUNTS[TOKENS.USDT], AMOUNTS[TOKENS.USDC]], [AMOUNTS2[TOKENS.WETH], AMOUNTS2[TOKENS.USDT]]],
+            maker_amounts: [[AMOUNTS[TOKENS.USDC]], [AMOUNTS[TOKENS.UNI]], [AMOUNTS2[TOKENS.UNI]]],
+            receiver: userAddress,
+            commands: "0x",
+            flags: generateTakerFlags(0, partnerId)
+        }
+        takerTransfersTypes = [[BlendCommand.SIMPLE_TRANSFER, BlendCommand.SIMPLE_TRANSFER], [BlendCommand.SIMPLE_TRANSFER], [BlendCommand.SIMPLE_TRANSFER, BlendCommand.TRANSFER_FROM_CONTRACT]]
+        makerTransfersTypes = [[BlendCommand.SIMPLE_TRANSFER], [BlendCommand.TRANSFER_TO_CONTRACT], [BlendCommand.SIMPLE_TRANSFER]]
     } else {
         throw new Error("Order not found")
     }

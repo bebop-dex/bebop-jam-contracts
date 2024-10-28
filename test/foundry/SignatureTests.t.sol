@@ -15,7 +15,7 @@ contract SignatureTests is Test, Utils {
         vm.chainId(1);
 
         maker = address(new EIP1271Wallet());
-        jam = new JamSettlement(PERMIT2, DAI_ADDRESS);
+        jam = new JamSettlement(PERMIT2, address(0), address(0));
     }
 
 

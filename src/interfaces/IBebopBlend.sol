@@ -5,6 +5,9 @@ import "../libraries/BlendSingleOrder.sol";
 import "../libraries/BlendMultiOrder.sol";
 import "../libraries/BlendAggregateOrder.sol";
 
+/// @title IBebopBlend is interface for interacting with BebopBlend contract, which aggregates PMM liquidity.
+/// Swaps through that contract have zero slippage.
+/// Deployed on 0xbbbbbBB520d69a9775E85b458C58c648259FAD5F
 interface IBebopBlend {
 
     enum BlendOrderType {

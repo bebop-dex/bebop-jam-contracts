@@ -4,6 +4,7 @@ import {
     BlendAggregateOrderStruct, BlendMultiOrderStruct,
     BlendSingleOrderStruct
 } from "../../../typechain-types/artifacts/src/interfaces/IBebopBlend";
+import {AMOUNTS} from "../config";
 
 
 interface PartnerInfo {
@@ -103,7 +104,7 @@ export function getSingleOrder(
     takerAddress: string,
     makerAddress: string,
     takerTransferType: BlendCommand,
-    makerTransferType: BlendCommand = BlendCommand.SIMPLE_TRANSFER,
+    makerTransferType: BlendCommand,
     takerSignatureType: SignatureType = SignatureType.EIP712,
     partnerId: number = 0,
     _expiry: number | undefined = undefined
@@ -125,33 +126,35 @@ export function getSingleOrder(
     }
 }
 
-// export function getMultiOrder(
-//     takerTokens: string[],
-//     makerTokens: string[],
-//     takerAddress: string,
-//     makerAddress: string,
-//     takerTransfersTypes: BlendCommand[],
-//     makerTransfersTypes: BlendCommand[],
-//     takerSignatureType: SignatureType = SignatureType.EIP712,
-//     partnerId: number = 0,
-//     _expiry: number | undefined = undefined
-// ): Order.MultiStruct {
-//     let expiry = _expiry === undefined ? Math.floor(Date.now() / 1000) + 1000 : _expiry;
-//     let maker_nonce = Math.floor(Math.random() * 1000000);
-//     return {
-//         taker_tokens: takerTokens,
-//         maker_tokens: makerTokens,
-//         taker_amounts: takerTokens.map(token => AMOUNTS[token]),
-//         maker_amounts: makerTokens.map(token => AMOUNTS[token]),
-//         taker_address: takerAddress,
-//         maker_address: makerAddress,
-//         receiver: takerAddress,
-//         maker_nonce,
-//         expiry,
-//         commands: "0x" + makerTransfersTypes.join('') + takerTransfersTypes.join(''),
-//         flags: generateTakerFlags(takerSignatureType, partnerId)
-//     }
-// }
+export function getMultiOrder(
+    takerTokens: string[],
+    makerTokens: string[],
+    takerAmounts: BigNumberish[],
+    makerAmounts: BigNumberish[],
+    takerAddress: string,
+    makerAddress: string,
+    takerTransferType: BlendCommand[],
+    makerTransferType: BlendCommand[],
+    takerSignatureType: SignatureType = SignatureType.EIP712,
+    partnerId: number = 0,
+    _expiry: number | undefined = undefined
+): BlendMultiOrderStruct {
+    let expiry = _expiry === undefined ? Math.floor(Date.now() / 1000) + 1000 : _expiry;
+    let maker_nonce = Math.floor(Math.random() * 1000000);
+    return {
+        taker_tokens: takerTokens,
+        maker_tokens: makerTokens,
+        taker_amounts: takerAmounts,
+        maker_amounts: makerAmounts,
+        taker_address: takerAddress,
+        maker_address: makerAddress,
+        receiver: takerAddress,
+        maker_nonce,
+        expiry,
+        commands: "0x" + makerTransferType.join('') + takerTransferType.join(''),
+        flags: generateTakerFlags(takerSignatureType, partnerId).toString()
+    }
+}
 
 export function getCommandsString(takerTransfersTypes: BlendCommand[][], makerTransfersTypes: BlendCommand[][]) {
     let commands = "0x"
@@ -227,7 +230,9 @@ export function getUniqueTokensForAggregate(order: BlendAggregateOrderStruct, ta
     return [uniqueTokens, tokens]
 }
 
-export function getMakerUniqueTokens(order: BlendAggregateOrderStruct, makerTransfersTypes: BlendCommand[][]): Map<string, BigNumber> {
+export function getMakerUniqueTokens(
+    order: BlendAggregateOrderStruct, makerTransfersTypes: BlendCommand[][], maker_amounts: BigNumberish[][]
+): Map<string, BigNumber> {
     let tokens = new Map<string, BigNumber>()
     for (let i = 0; i < order.maker_tokens.length; i+=1) {
         for (let [j, token] of order.maker_tokens[i].entries()) {
@@ -235,9 +240,9 @@ export function getMakerUniqueTokens(order: BlendAggregateOrderStruct, makerTran
                 continue
             }
             if (tokens.has(token)) {
-                tokens.set(token, tokens.get(token)!.add(order.maker_amounts[i][j]))
+                tokens.set(token, tokens.get(token)!.add(maker_amounts[i][j]))
             } else {
-                tokens.set(token, BigNumber.from(order.maker_amounts[i][j]))
+                tokens.set(token, BigNumber.from(maker_amounts[i][j]))
             }
         }
     }

@@ -1,5 +1,5 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {JamOrder, JamSettlement} from "../../../typechain-types/artifacts/src/JamSettlement";
+import {JamOrderStruct, JamSettlement} from "../../../typechain-types/artifacts/src/JamSettlement";
 import {Signer} from "ethers";
 import {PERMIT2_ADDRESS} from "../config";
 import {TypedDataSigner} from "@ethersproject/abstract-signer/src.ts";
@@ -11,22 +11,36 @@ const JAM_ORDER_TYPES = {
         { "name": "taker", "type": "address" },
         { "name": "receiver", "type": "address" },
         { "name": "expiry", "type": "uint256" },
+        { "name": "exclusivityDeadline", "type": "uint256" },
         { "name": "nonce", "type": "uint256" },
         { "name": "executor", "type": "address" },
-        { "name": "minFillPercent", "type": "uint16" },
-        { "name": "hooksHash", "type": "bytes32" },
+        { "name": "partnerInfo", "type": "uint256" },
         { "name": "sellTokens", "type": "address[]" },
         { "name": "buyTokens", "type": "address[]" },
         { "name": "sellAmounts", "type": "uint256[]" },
         { "name": "buyAmounts", "type": "uint256[]" },
-        { "name": "sellNFTIds", "type": "uint256[]" },
-        { "name": "buyNFTIds", "type": "uint256[]" },
-        { "name": "sellTokenTransfers", "type": "bytes" },
-        { "name": "buyTokenTransfers", "type": "bytes" },
+        { "name": "hooksHash", "type": "bytes32" }
     ]
 }
 
-export async function signPermit2AndJam(user: Signer & TypedDataSigner, order: JamOrder.DataStruct, spender: string): Promise<string>{
+function toDictForSigning(order: JamOrderStruct, hooksHash: string): any {
+    return {
+        taker: order.taker,
+        receiver: order.receiver,
+        expiry: order.expiry,
+        exclusivityDeadline: order.exclusivityDeadline,
+        nonce: order.nonce,
+        executor: order.executor,
+        partnerInfo: order.partnerInfo,
+        sellTokens: order.sellTokens,
+        buyTokens: order.buyTokens,
+        sellAmounts: order.sellAmounts,
+        buyAmounts: order.buyAmounts,
+        hooksHash: hooksHash
+    }
+}
+
+export async function signPermit2AndJam(user: Signer & TypedDataSigner, order: JamOrderStruct, hooksHash: string, spender: string): Promise<string>{
     let chainId: number = await user.getChainId()
 
     let tokenDetails: TokenPermissions[] = []
@@ -43,7 +57,7 @@ export async function signPermit2AndJam(user: Signer & TypedDataSigner, order: J
         deadline: order.expiry
     }
     let witness: Witness = {
-        witness: order,
+        witness: toDictForSigning(order, hooksHash),
         witnessTypeName: "JamOrder",
         witnessType: JAM_ORDER_TYPES
     }
@@ -52,12 +66,12 @@ export async function signPermit2AndJam(user: Signer & TypedDataSigner, order: J
     return await user._signTypedData(domain, types, values)
 }
 
-export async function signJamOrder(user: SignerWithAddress, order: JamOrder.DataStruct, settlement: JamSettlement): Promise<string> {
+export async function signJamOrder(user: SignerWithAddress, order: JamOrderStruct, hooksHash: string, settlement: JamSettlement): Promise<string> {
     const JAM_DOMAIN = {
         "name": "JamSettlement",
-        "version": "1",
+        "version": "2",
         "chainId": await user.getChainId(),
         "verifyingContract": settlement.address
     }
-    return await user._signTypedData(JAM_DOMAIN, JAM_ORDER_TYPES, order);
+    return await user._signTypedData(JAM_DOMAIN, JAM_ORDER_TYPES, toDictForSigning(order, hooksHash),);
 }

@@ -77,7 +77,7 @@ export class HooksGenerator {
         const eip2612PermitUtils = new Eip2612PermitUtils(connector);
         const tokenContract = new Contract(tokenAddress, ERC20, this.user)
         let tokenName = await tokenContract.name()
-        let version = await tokenContract.version()
+        let version = await eip2612PermitUtils.getTokenVersion(tokenAddress);
         let nonce = await eip2612PermitUtils.getTokenNonce(
             tokenAddress,
             this.userAddress!,

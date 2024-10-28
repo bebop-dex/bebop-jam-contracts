@@ -57,7 +57,8 @@ contract JamSolver {
         JamInteraction.Data[] calldata calls, address[] calldata outputTokens, uint256[] calldata outputAmounts, address receiver
     ) public payable onlyOwnerOrigin onlySettlement {
         for(uint i; i < calls.length; i++) {
-            JamInteraction.execute(calls[i]);
+            (bool success, ) = payable(calls[i].to).call{value: calls[i].value}(calls[i].data);
+            require(success, "Interaction failed");
         }
 
         for(uint i; i < outputTokens.length; i++) {
