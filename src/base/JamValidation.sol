@@ -80,7 +80,7 @@ abstract contract JamValidation {
 
     /// @notice Hash Jam order and return the hash
     /// @param order The order to hash
-    /// @param hooksHash The hash of the hooks to include in the order hash
+    /// @param hooksHash The hash of the hooks to include in the order hash, 0x000..00 if no hooks
     function hashJamOrder(JamOrder calldata order, bytes32 hooksHash) external pure returns (bytes32) {
         return order.hash(hooksHash);
     }

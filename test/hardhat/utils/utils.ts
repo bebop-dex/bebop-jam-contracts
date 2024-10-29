@@ -164,3 +164,15 @@ export function encodeHooks(
         ]
     )
 }
+
+export function assertBlendAggregateEvent(
+    eventArgs: any, eventId: BigNumber, receiver: string, takerTokens: string[][], makerTokens: string[][],
+    takerAmounts: BigNumberish[][], makerAmounts: BigNumberish[][]
+){
+    expect(eventArgs.eventId).to.be.equal(eventId)
+    expect(eventArgs.receiver).to.be.equal(receiver)
+    expect(eventArgs.sellTokens).to.be.deep.equal(takerTokens)
+    expect(eventArgs.buyTokens).to.be.deep.equal(makerTokens)
+    expect(eventArgs.sellAmounts).to.be.deep.equal(takerAmounts.map(tokens => tokens.map(token => BigNumber.from(token))))
+    expect(eventArgs.buyAmounts).to.be.deep.equal(makerAmounts.map(tokens => tokens.map(token => BigNumber.from(token))))
+}

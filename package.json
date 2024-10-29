@@ -1,18 +1,18 @@
 {
   "name": "bebop-jam-contracts",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Bebop JAM",
   "directories": {
     "lib": "lib",
     "test": "test"
   },
   "scripts": {
-    "compile": "hardhat compile",
-    "test": "hardhat test",
+    "compile": "npx hardhat compile",
+    "test": "npx hardhat test",
     "test:jam": "npx hardhat test ./test/hardhat/JamOrders.test.ts",
     "test:blend": "npx hardhat test ./test/hardhat/BlendOrders.test.ts",
-    "deploy": "hardhat deploy",
-    "deploySolver": "hardhat deploySolver",
+    "deploy": "npx hardhat deploy",
+    "deploySolver": "npx hardhat deploySolver",
     "flatten-contracts": "sol-merger \"./src/*.sol\" ./flatten"
   },
   "author": "<info@bebop.xyz>",

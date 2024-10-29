@@ -4,7 +4,7 @@ import {
 } from "../../typechain-types/artifacts/src/JamSettlement";
 import {NATIVE_TOKEN, PERMIT2_ADDRESS, TOKENS} from "./config";
 import {
-  approveTokens, encodeHooks,
+  approveTokens, assertBlendAggregateEvent, encodeHooks,
   getBalancesBefore,
   verifyBalancesAfter
 } from "./utils/utils";
@@ -29,12 +29,13 @@ import {
 } from "./signing/signBebopBlend";
 import {getAggregateBlendOrder, getMultiBlendOrder, getSingleBlendOrder} from "./blend/blendOrders";
 import {
-  BlendCommand,
+  BlendCommand, getEventId,
   getMakerOrderFromAggregate,
   getMakerUniqueTokens,
   getUniqueTokensForAggregate
 } from "./blend/blendUtils";
 import {BigNumber, utils} from "ethers";
+import {expect} from "chai";
 
 
 describe("BlendOrders", function () {
@@ -78,10 +79,13 @@ describe("BlendOrders", function () {
         [order.maker_token], order.receiver, order.maker_address
     )
     let encodedHooks = encodeHooks(hooks);
-    await settlement.connect(fixture.executor).settleBebopBlend(user.address, 0, orderBytes, encodedHooks);
+    let res = await settlement.connect(fixture.executor).settleBebopBlend(user.address, 0, orderBytes, encodedHooks);
     let amounts = oldQuoteSingle.useOldAmount ? [oldQuoteSingle.makerAmount] : [order.maker_amount]
     await verifyBalancesAfter([order.maker_token], order.receiver, zeroAddress, false,
         amounts, 0, userBalancesBefore, {}, false, settlement.address)
+    await expect(res).to.emit(settlement, "BebopBlendSingleOrderFilled").withArgs(
+        getEventId(BigNumber.from(order.flags)), order.receiver, order.taker_token, order.maker_token,  order.taker_amount, amounts[0]
+    )
   }
 
   async function settleBebopBlendMulti(
@@ -110,10 +114,13 @@ describe("BlendOrders", function () {
     let [userBalancesBefore, makerBalancesBefore] = await getBalancesBefore(
         order.maker_tokens, order.receiver, order.maker_address
     )
-    await settlement.connect(fixture.executor).settleBebopBlend(user.address, 1, orderBytes, "0x");
+    let res = await settlement.connect(fixture.executor).settleBebopBlend(user.address, 1, orderBytes, "0x");
     let amounts = oldQuoteMulti.useOldAmount ? oldQuoteMulti.makerAmounts : order.maker_amounts
     await verifyBalancesAfter( order.maker_tokens, order.receiver, zeroAddress, false,
         amounts, 0, userBalancesBefore, {}, true, settlement.address)
+    await expect(res).to.emit(settlement, "BebopBlendMultiOrderFilled").withArgs(
+        getEventId(BigNumber.from(order.flags)), order.receiver, order.taker_tokens, order.maker_tokens,  order.taker_amounts, amounts
+    )
   }
 
   async function settleBebopBlendAggregate(
@@ -165,9 +172,15 @@ describe("BlendOrders", function () {
     let [userBalancesBefore, makerBalancesBefore] = await getBalancesBefore(
         buyTokensSymbols, order.receiver, makers[0].address
     )
-    await settlement.connect(fixture.executor).settleBebopBlend(user.address, 2, orderBytes, "0x");
+    let res = await settlement.connect(fixture.executor).settleBebopBlend(user.address, 2, orderBytes, "0x");
     await verifyBalancesAfter(buyTokensSymbols, order.receiver, zeroAddress, false,
         buyTokensSymbols.map(t => buyTokens.get(t)!), 0, userBalancesBefore, {}, true, settlement.address)
+    let events = (await res.wait(1)).events!
+    assertBlendAggregateEvent(
+        events[events.length - 1].args,
+        getEventId(BigNumber.from(order.flags)), order.receiver, order.taker_tokens, order.maker_tokens,  order.taker_amounts,
+        oldQuoteAggregate.useOldAmount ? oldQuoteAggregate.makerAmounts : order.maker_amounts
+    )
   }
 
   before(async () => {

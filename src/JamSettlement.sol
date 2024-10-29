@@ -149,7 +149,8 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
             approveToken(IERC20(order.taker_token), order.taker_amount, bebopBlend);
             IBebopBlend(bebopBlend).settleSingle(order, makerSignature, 0, takerQuoteInfo, "0x");
             emit BebopBlendSingleOrderFilled(
-                uint128(order.flags >> 128), order.receiver, order.taker_token, order.maker_token, order.taker_amount, order.maker_amount
+                uint128(order.flags >> 128), order.receiver, order.taker_token, order.maker_token, order.taker_amount,
+                takerQuoteInfo.useOldAmount ? takerQuoteInfo.makerAmount : order.maker_amount
             );
         } else if (orderType == IBebopBlend.BlendOrderType.Multi){
             (
@@ -164,7 +165,8 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
             }
             IBebopBlend(bebopBlend).settleMulti(order, makerSignature, 0, takerQuoteInfo, "0x");
             emit BebopBlendMultiOrderFilled(
-                uint128(order.flags >> 128), order.receiver, order.taker_tokens, order.maker_tokens, order.taker_amounts, order.maker_amounts
+                uint128(order.flags >> 128), order.receiver, order.taker_tokens, order.maker_tokens, order.taker_amounts,
+                takerQuoteInfo.useOldAmount ? takerQuoteInfo.makerAmounts : order.maker_amounts
             );
         } else if (orderType == IBebopBlend.BlendOrderType.Aggregate){
             (
@@ -180,7 +182,8 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
             }
             IBebopBlend(bebopBlend).settleAggregate(order, makerSignatures, 0, takerQuoteInfo, "0x");
             emit BebopBlendAggregateOrderFilled(
-                uint128(order.flags >> 128), order.receiver, order.taker_tokens, order.maker_tokens, order.taker_amounts, order.maker_amounts
+                uint128(order.flags >> 128), order.receiver, order.taker_tokens, order.maker_tokens, order.taker_amounts,
+                takerQuoteInfo.useOldAmount ? takerQuoteInfo.makerAmounts : order.maker_amounts
             );
         } else {
             revert InvalidBlendOrderType();
