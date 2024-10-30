@@ -48,12 +48,13 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
             balanceManager.transferTokens(order.sellTokens, order.sellAmounts, order.taker, balanceRecipient);
         }
         require(JamInteraction.runInteractions(interactions, balanceManager), InteractionsFailed());
-        transferTokensFromContract(order.buyTokens, order.buyAmounts, order.receiver, order.partnerInfo, false);
+        uint256[] memory buyAmounts = order.buyAmounts;
+        transferTokensFromContract(order.buyTokens, buyAmounts, order.receiver, order.partnerInfo, false);
         if (hooksHash != JamHooks.EMPTY_HOOKS_HASH){
             require(JamInteraction.runInteractionsM(hooks.afterSettle, balanceManager), AfterSettleHooksFailed());
         }
         emit BebopJamOrderFilled(
-            order.nonce, order.taker, order.sellTokens, order.buyTokens, order.sellAmounts, order.buyAmounts
+            order.nonce, order.taker, order.sellTokens, order.buyTokens, order.sellAmounts, buyAmounts
         );
     }
 
@@ -83,7 +84,7 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
             require(JamInteraction.runInteractionsM(hooks.afterSettle, balanceManager), AfterSettleHooksFailed());
         }
         emit BebopJamOrderFilled(
-            order.nonce, order.taker, order.sellTokens, order.buyTokens, order.sellAmounts, order.buyAmounts
+            order.nonce, order.taker, order.sellTokens, order.buyTokens, order.sellAmounts, buyAmounts
         );
     }
 
@@ -112,14 +113,15 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
         }
         require(JamInteraction.runInteractions(interactions, balanceManager), InteractionsFailed());
         for (uint i; i < orders.length; ++i) {
+            uint256[] memory buyAmounts = calculateNewAmounts(i, orders);
             transferTokensFromContract(
-                orders[i].buyTokens, calculateNewAmounts(i, orders), orders[i].receiver, orders[i].partnerInfo, true
+                orders[i].buyTokens, buyAmounts, orders[i].receiver, orders[i].partnerInfo, true
             );
             if (executeHooks){
                 require(JamInteraction.runInteractions(hooks[i].afterSettle, balanceManager), AfterSettleHooksFailed());
             }
             emit BebopJamOrderFilled(
-                orders[i].nonce, orders[i].taker, orders[i].sellTokens, orders[i].buyTokens, orders[i].sellAmounts, orders[i].buyAmounts
+                orders[i].nonce, orders[i].taker, orders[i].sellTokens, orders[i].buyTokens, orders[i].sellAmounts, buyAmounts
             );
         }
     }
@@ -176,14 +178,14 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
                 bytes memory takerSignature
             ) = abi.decode(data, (BlendAggregateOrder, IBebopBlend.MakerSignature[], IBebopBlend.OldAggregateQuote, bytes));
             balanceManager.transferTokensForAggregateBebopOrder(order, takerQuoteInfo, takerSignature, takerAddress, hooksHash);
-            (address[] memory tokens, uint256[] memory amounts) = order.unpackTokensAndAmounts();
+            (address[] memory tokens, uint256[] memory amounts) = order.unpackTokensAndAmounts(true, takerQuoteInfo);
             for (uint i; i < tokens.length; ++i) {
                 approveToken(IERC20(tokens[i]), amounts[i], bebopBlend);
             }
             IBebopBlend(bebopBlend).settleAggregate(order, makerSignatures, 0, takerQuoteInfo, "0x");
+            (address[] memory buyTokens, uint256[] memory buyAmounts) = order.unpackTokensAndAmounts(false, takerQuoteInfo);
             emit BebopBlendAggregateOrderFilled(
-                uint128(order.flags >> 128), order.receiver, order.taker_tokens, order.maker_tokens, order.taker_amounts,
-                takerQuoteInfo.useOldAmount ? takerQuoteInfo.makerAmounts : order.maker_amounts
+                uint128(order.flags >> 128), order.receiver, tokens, buyTokens, amounts, buyAmounts
             );
         } else {
             revert InvalidBlendOrderType();

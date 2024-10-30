@@ -19,19 +19,18 @@ export async function getBebopSolverCalls(
     bebop: BebopSettlement,
     takerAddress: string,
     maker: SignerWithAddress,
-    curFillPercent: number = 10000
+    solverExcess: number = 1000
 ): Promise<JamInteraction.DataStruct[]> {
     const taker_address = takerAddress;
     const maker_address = maker.address;
     const taker_amounts = [];
-    const solverExcess = 1000;
     let maker_amounts = []
     let taker_tokens = [];
     let maker_tokens = [];
     let takerCommands: BlendCommand[] = []
     let makerCommands: BlendCommand[] = []
     for (let i = 0; i < jamOrder.buyTokens.length; i++){
-        maker_amounts.push(BigNumber.from(jamOrder.buyAmounts[i]).mul(curFillPercent).div(10000).add(solverExcess).toString());
+        maker_amounts.push(BigNumber.from(jamOrder.buyAmounts[i]).add(solverExcess).toString());
         if (jamOrder.buyTokens[i] === TOKENS.ETH){
             maker_tokens.push(TOKENS.WETH)
             makerCommands.push(BlendCommand.NATIVE_TRANSFER)
@@ -44,7 +43,7 @@ export async function getBebopSolverCalls(
     let nativeTokenAmount = BigNumber.from(0)
     let solverCalls: JamInteraction.DataStruct[] = []
     for (let i = 0; i < jamOrder.sellTokens.length; i++){
-        taker_amounts.push(BigNumber.from(jamOrder.sellAmounts[i]).mul(curFillPercent).div(10000))
+        taker_amounts.push(BigNumber.from(jamOrder.sellAmounts[i]))
         if (jamOrder.sellTokens[i] === TOKENS.ETH){
             taker_tokens.push(TOKENS.WETH)
             nativeTokenAmount = nativeTokenAmount.add(taker_amounts[i])

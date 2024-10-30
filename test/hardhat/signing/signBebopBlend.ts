@@ -16,7 +16,11 @@ import {
 import {SignatureTransfer, Witness} from "@uniswap/permit2-sdk";
 import {PERMIT2_ADDRESS} from "../config";
 import OldMultiQuoteStruct = IBebopBlend.OldMultiQuoteStruct;
-import {BlendCommand, getEventId, getUniqueTokensForAggregate} from "../blend/blendUtils";
+import {
+    BlendCommand,
+    getEventId,
+    getTakerUniqueTokensForAggregate
+} from "../blend/blendUtils";
 import OldAggregateQuoteStruct = IBebopBlend.OldAggregateQuoteStruct;
 
 export const SINGLE_ORDER_TYPES = {
@@ -198,7 +202,7 @@ export async function signBlendAggregateOrderAndPermit2(
     let fields = toBlendOrderDictForJam(order, hooksHash, partner_id, signedValuesByTaker)
     let chainId: number = await user.getChainId()
     let tokenDetails: TokenPermissions[] = []
-    let [tokens, tokenAmounts] = getUniqueTokensForAggregate(order, takerTransfersTypes)
+    let [tokens, tokenAmounts] = getTakerUniqueTokensForAggregate(order, takerTransfersTypes)
     for (let i = 0; i < tokens.length; i++){
         tokenDetails.push({
             token: tokens[i],

@@ -110,7 +110,7 @@ contract JamBalanceManager is IJamBalanceManager {
         address takerAddress,
         bytes32 hooksHash
     ) onlyOperator(msg.sender) external {
-        (address[] memory tokens, uint256[] memory amounts) = order.unpackTokensAndAmounts();
+        (address[] memory tokens, uint256[] memory amounts) = order.unpackTokensAndAmounts(true, oldAggregateQuote);
         PERMIT2.permitWitnessTransferFrom(
             order.toBatchPermit2(tokens, amounts),
             BlendAggregateOrderLib.toSignatureTransferDetails(amounts, operator),

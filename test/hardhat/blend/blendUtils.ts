@@ -4,7 +4,6 @@ import {
     BlendAggregateOrderStruct, BlendMultiOrderStruct,
     BlendSingleOrderStruct
 } from "../../../typechain-types/artifacts/src/interfaces/IBebopBlend";
-import {AMOUNTS} from "../config";
 
 
 interface PartnerInfo {
@@ -183,35 +182,9 @@ export function getMakerOrderFromAggregate(
     }
 }
 
-// export function getAggregateOrder(
-//     takerTokens: string[][],
-//     makerTokens: string[][],
-//     takerAddress: string,
-//     makerAddresses: string[],
-//     takerTransfersTypes: BlendCommand[][],
-//     makerTransfersTypes: BlendCommand[][],
-//     takerSignatureType: SignatureType = SignatureType.EIP712,
-//     partnerId: number = 0,
-//     _expiry: number | undefined = undefined
-// ): Order.AggregateStruct {
-//     let expiry = _expiry === undefined ? Math.floor(Date.now() / 1000) + 1000 : _expiry;
-//     let maker_nonces = makerAddresses.map(_ => Math.floor(Math.random() * 1000000));
-//     return {
-//         taker_tokens: takerTokens,
-//         maker_tokens: makerTokens,
-//         taker_amounts: takerTokens.map(tokens => tokens.map(token => BigNumber.from(AMOUNTS[token]).mul(randomInt(1, 5)).toString())),
-//         maker_amounts: makerTokens.map(tokens => tokens.map(token => BigNumber.from(AMOUNTS[token]).mul(randomInt(1, 5)).toString())),
-//         taker_address: takerAddress,
-//         maker_addresses: makerAddresses,
-//         receiver: takerAddress,
-//         maker_nonces,
-//         expiry,
-//         commands: getCommandsString(takerTransfersTypes, makerTransfersTypes),
-//         flags: generateTakerFlags(takerSignatureType, partnerId)
-//     }
-// }
-
-export function getUniqueTokensForAggregate(order: BlendAggregateOrderStruct, takerTransfersTypes: BlendCommand[][]): [string[], Map<string, BigNumber>] {
+export function getTakerUniqueTokensForAggregate(
+    order: BlendAggregateOrderStruct, takerTransfersTypes: BlendCommand[][]
+): [string[], Map<string, BigNumber>] {
     let tokens = new Map<string, BigNumber>()
     let uniqueTokens: string[] = []
     for (let [i, tokensArray] of order.taker_tokens.entries()) {
@@ -230,10 +203,11 @@ export function getUniqueTokensForAggregate(order: BlendAggregateOrderStruct, ta
     return [uniqueTokens, tokens]
 }
 
-export function getMakerUniqueTokens(
+export function getMakerUniqueTokensForAggregate(
     order: BlendAggregateOrderStruct, makerTransfersTypes: BlendCommand[][], maker_amounts: BigNumberish[][]
-): Map<string, BigNumber> {
+): [string[], Map<string, BigNumber>] {
     let tokens = new Map<string, BigNumber>()
+    let uniqueTokens: string[] = []
     for (let i = 0; i < order.maker_tokens.length; i+=1) {
         for (let [j, token] of order.maker_tokens[i].entries()) {
             if (makerTransfersTypes[i][j] == BlendCommand.TRANSFER_TO_CONTRACT) {
@@ -242,9 +216,10 @@ export function getMakerUniqueTokens(
             if (tokens.has(token)) {
                 tokens.set(token, tokens.get(token)!.add(maker_amounts[i][j]))
             } else {
+                uniqueTokens.push(token)
                 tokens.set(token, BigNumber.from(maker_amounts[i][j]))
             }
         }
     }
-    return tokens
+    return [uniqueTokens, tokens]
 }

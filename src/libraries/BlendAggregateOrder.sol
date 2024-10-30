@@ -2,7 +2,7 @@
 pragma solidity ^0.8.27;
 
 import "../interfaces/IPermit2.sol";
-
+import "../interfaces/IBebopBlend.sol";
 
 /// @notice Struct for any trade with multiple makers
 struct BlendAggregateOrder {
@@ -70,36 +70,57 @@ library BlendAggregateOrderLib {
         return details;
     }
 
+    /// @notice Unpack 2d arrays of tokens and amounts into 1d array without duplicates
+    /// @param order the order to unpack
+    /// @param unpackTakerAmounts if true, unpack taker amounts, otherwise unpack maker amounts
     function unpackTokensAndAmounts(
-        BlendAggregateOrder memory order
+        BlendAggregateOrder memory order, bool unpackTakerAmounts, IBebopBlend.OldAggregateQuote memory oldAggregateQuote
     ) internal pure returns (address[] memory tokens, uint256[] memory amounts){
         uint maxLen;
-        for (uint i; i < order.taker_tokens.length; ++i) {
-            maxLen += order.taker_tokens[i].length;
+        for (uint i; i < order.maker_addresses.length; ++i) {
+            maxLen += unpackTakerAmounts ? order.taker_tokens[i].length : order.maker_tokens[i].length;
         }
         tokens = new address[](maxLen);
         amounts = new uint256[](maxLen);
         uint uniqueTokensCnt;
         uint commandsInd;
-        for (uint256 i; i < order.taker_tokens.length; ++i) {
-            commandsInd += order.maker_tokens[i].length;
-            for (uint256 j; j < order.taker_tokens[i].length; ++j) {
-                if (order.commands[commandsInd + j] != 0x08) {  // Commands.TRANSFER_FROM_CONTRACT=0x08
+        for (uint256 i; i < order.maker_addresses.length; ++i) {
+            if (unpackTakerAmounts) {
+                commandsInd += order.maker_tokens[i].length;
+            }
+            uint curTokensLen = unpackTakerAmounts ? order.taker_tokens[i].length : order.maker_tokens[i].length;
+            for (uint256 j; j < curTokensLen; ++j) {
+                /// @dev  AggregateOrder contains multiple maker orders, 'commands' field indicates how to transfer tokens
+                /// All commands packed into one variable with bytes type, for each token command is 1 byte:
+                /// '0x[maker1_order_maker_tokens][maker1_order_taker_tokens][maker2_order_maker_tokens][maker2_order_taker_tokens]...'
+                /// ignoring TRANSFER_FROM_CONTRACT and TRANSFER_TO_CONTRACT commands, since they are transfers between makers
+                if (
+                    (unpackTakerAmounts && order.commands[commandsInd + j] != 0x08) ||  // Commands.TRANSFER_FROM_CONTRACT=0x08
+                    (!unpackTakerAmounts && order.commands[commandsInd + j] != 0x07)    //Commands.TRANSFER_TO_CONTRACT=0x07
+                ) {
                     bool isNew = true;
+                    address token = unpackTakerAmounts ? order.taker_tokens[i][j] : order.maker_tokens[i][j];
+                    uint256 amount = unpackTakerAmounts ? order.taker_amounts[i][j] : (
+                        oldAggregateQuote.useOldAmount ? oldAggregateQuote.makerAmounts[i][j] : order.maker_amounts[i][j]
+                    );
                     for (uint256 k; k < uniqueTokensCnt; ++k) {
-                        if (tokens[k] == order.taker_tokens[i][j]) {
-                            amounts[k] += order.taker_amounts[i][j];
+                        if (tokens[k] == token) {
+                            amounts[k] += amount;
                             isNew = false;
                             break;
                         }
                     }
                     if (isNew) {
-                        tokens[uniqueTokensCnt] = order.taker_tokens[i][j];
-                        amounts[uniqueTokensCnt++] = order.taker_amounts[i][j];
+                        tokens[uniqueTokensCnt] = token;
+                        amounts[uniqueTokensCnt++] = amount;
                     }
                 }
             }
-            commandsInd += order.taker_tokens[i].length;
+            if (unpackTakerAmounts) {
+                commandsInd += order.taker_tokens[i].length;
+            } else {
+                commandsInd += order.maker_tokens[i].length + order.taker_tokens[i].length;
+            }
         }
         assembly {
             mstore(tokens, uniqueTokensCnt)

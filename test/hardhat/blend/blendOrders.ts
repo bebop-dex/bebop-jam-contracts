@@ -216,7 +216,7 @@ export function getAggregateBlendOrder(
         }
         takerTransfersTypes = [[BlendCommand.SIMPLE_TRANSFER], [BlendCommand.TRANSFER_FROM_CONTRACT], [BlendCommand.TRANSFER_FROM_CONTRACT]]
         makerTransfersTypes = [[BlendCommand.SIMPLE_TRANSFER, BlendCommand.TRANSFER_TO_CONTRACT], [BlendCommand.SIMPLE_TRANSFER], [BlendCommand.SIMPLE_TRANSFER]]
-    } else if ("Many-to-One 3 makers with hop"){
+    } else if (orderName === "Many-to-One 3 makers with hop"){
         // WETH, USDT -> UNI trade (USDC is middle token)
         order = {
             expiry: generateExpiry(),
@@ -225,14 +225,31 @@ export function getAggregateBlendOrder(
             maker_nonces: nonces,
             taker_tokens: [[TOKENS.WETH, TOKENS.USDT], [TOKENS.WETH], [TOKENS.USDT, TOKENS.USDC]],
             maker_tokens: [ [TOKENS.UNI], [TOKENS.USDC], [TOKENS.UNI]],
-            taker_amounts: [[AMOUNTS[TOKENS.WETH]], [AMOUNTS[TOKENS.USDT], AMOUNTS[TOKENS.USDC]], [AMOUNTS2[TOKENS.WETH], AMOUNTS2[TOKENS.USDT]]],
-            maker_amounts: [[AMOUNTS[TOKENS.USDC]], [AMOUNTS[TOKENS.UNI]], [AMOUNTS2[TOKENS.UNI]]],
+            taker_amounts: [[AMOUNTS[TOKENS.WETH], AMOUNTS[TOKENS.USDT]], [AMOUNTS2[TOKENS.WETH]], [AMOUNTS2[TOKENS.USDT], AMOUNTS2[TOKENS.USDC]]],
+            maker_amounts: [[AMOUNTS[TOKENS.UNI]], [AMOUNTS2[TOKENS.USDC]], [AMOUNTS2[TOKENS.UNI]]],
             receiver: userAddress,
             commands: "0x",
             flags: generateTakerFlags(0, partnerId)
         }
         takerTransfersTypes = [[BlendCommand.SIMPLE_TRANSFER, BlendCommand.SIMPLE_TRANSFER], [BlendCommand.SIMPLE_TRANSFER], [BlendCommand.SIMPLE_TRANSFER, BlendCommand.TRANSFER_FROM_CONTRACT]]
         makerTransfersTypes = [[BlendCommand.SIMPLE_TRANSFER], [BlendCommand.TRANSFER_TO_CONTRACT], [BlendCommand.SIMPLE_TRANSFER]]
+    } else if (orderName === "One-to-Many 3 makers with 2 hops"){
+        // WETH -> UNI,AAVE trade (USDC, USDT - middle tokens)
+        order = {
+            expiry: generateExpiry(),
+            taker_address: jamSettlement,
+            maker_addresses: makerAddresses,
+            maker_nonces: nonces,
+            taker_tokens: [[TOKENS.USDC], [TOKENS.WETH], [TOKENS.USDT]],
+            maker_tokens: [[TOKENS.UNI], [TOKENS.USDC, TOKENS.USDT], [TOKENS.AAVE]],
+            taker_amounts: [[AMOUNTS[TOKENS.USDC]], [AMOUNTS[TOKENS.WETH]], [AMOUNTS[TOKENS.USDT]]],
+            maker_amounts: [[AMOUNTS[TOKENS.UNI]], [AMOUNTS[TOKENS.USDC], AMOUNTS[TOKENS.USDT]], [AMOUNTS[TOKENS.AAVE]]],
+            receiver: userAddress,
+            commands: "0x",
+            flags: generateTakerFlags(0, partnerId)
+        }
+        takerTransfersTypes = [[BlendCommand.TRANSFER_FROM_CONTRACT], [BlendCommand.SIMPLE_TRANSFER], [BlendCommand.TRANSFER_FROM_CONTRACT]]
+        makerTransfersTypes = [[BlendCommand.SIMPLE_TRANSFER], [BlendCommand.TRANSFER_TO_CONTRACT, BlendCommand.TRANSFER_TO_CONTRACT], [BlendCommand.SIMPLE_TRANSFER]]
     } else {
         throw new Error("Order not found")
     }

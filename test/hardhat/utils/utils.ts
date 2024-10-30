@@ -2,8 +2,10 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {BigNumber, BigNumberish, utils} from "ethers";
 import {ethers} from "hardhat";
 import {expect} from "chai";
-import {NATIVE_TOKEN} from "../config";
+import {NATIVE_TOKEN, TOKENS} from "../config";
 import {JamHooks, JamOrderStruct} from "../../../typechain-types/artifacts/src/JamSettlement";
+import {BlendAggregateOrderStruct} from "../../../typechain-types/artifacts/src/interfaces/IBebopBlend";
+import {getEventId} from "../blend/blendUtils";
 
 
 export function generateExpiry(){
@@ -46,16 +48,14 @@ export async function getBalancesBefore(
 export async function verifyBalancesAfter(
     tokens: string[],
     receiver: string,
-    solverAddress: string,
-    usingSolverContract: boolean,
     amounts: BigNumberish[],
-    excess: BigNumberish,
     userBalancesBefore: {[id:string]: BigNumberish},
     solverBalancesBefore: {[id:string]: BigNumberish},
-    internalSettle: boolean,
-    settlementAddr: string
+    settlementAddr: string,
+    solverAddress: string,
+    usingSolverContract: boolean = false,
+    solverExcess: BigNumberish = BigNumber.from(0)
 ){
-    let takerGetExcess = !usingSolverContract && !internalSettle
     for (let [i, token] of tokens.entries()) {
         let userBalanceAfter;
         let solverBalanceAfter;
@@ -67,13 +67,13 @@ export async function verifyBalancesAfter(
             userBalanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(receiver)
             solverBalanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(solverAddress)
             if (usingSolverContract){
-                expect(solverBalanceAfter.sub(solverBalancesBefore[token])).to.be.equal(excess)
+                expect(solverBalanceAfter.sub(solverBalancesBefore[token])).to.be.equal(solverExcess)
             }
         }
         if (receiver === settlementAddr) {
             expect(userBalanceAfter.sub(userBalancesBefore[token])).to.be.equal(BigNumber.from(0))
         } else {
-            expect(userBalanceAfter.sub(userBalancesBefore[token])).to.be.equal(BigNumber.from(amounts[i]).add(takerGetExcess ? excess : 0))
+            expect(userBalanceAfter.sub(userBalancesBefore[token])).to.be.equal(BigNumber.from(amounts[i]))
         }
     }
 }
@@ -166,13 +166,20 @@ export function encodeHooks(
 }
 
 export function assertBlendAggregateEvent(
-    eventArgs: any, eventId: BigNumber, receiver: string, takerTokens: string[][], makerTokens: string[][],
-    takerAmounts: BigNumberish[][], makerAmounts: BigNumberish[][]
+    eventArgs: any,
+    order: BlendAggregateOrderStruct,
+    sellTokens: string[],
+    sellAmounts: Map<string, BigNumber>,
+    buyTokens: string[],
+    buyAmounts: Map<string, BigNumber>,
 ){
-    expect(eventArgs.eventId).to.be.equal(eventId)
-    expect(eventArgs.receiver).to.be.equal(receiver)
-    expect(eventArgs.sellTokens).to.be.deep.equal(takerTokens)
-    expect(eventArgs.buyTokens).to.be.deep.equal(makerTokens)
-    expect(eventArgs.sellAmounts).to.be.deep.equal(takerAmounts.map(tokens => tokens.map(token => BigNumber.from(token))))
-    expect(eventArgs.buyAmounts).to.be.deep.equal(makerAmounts.map(tokens => tokens.map(token => BigNumber.from(token))))
+    expect(eventArgs.eventId).to.be.equal(getEventId(BigNumber.from(order.flags)))
+    expect(eventArgs.receiver).to.be.equal(order.receiver)
+    expect(eventArgs.sellTokens).to.be.deep.equal(sellTokens)
+    expect(eventArgs.buyTokens).to.be.deep.equal(buyTokens)
+    expect(eventArgs.sellAmounts).to.be.deep.equal(sellTokens.map(token => sellAmounts.get(token)))
+    if (buyAmounts.has(NATIVE_TOKEN)){
+        buyAmounts.set(TOKENS.WETH, buyAmounts.get(NATIVE_TOKEN)!)
+    }
+    expect(eventArgs.buyAmounts).to.be.deep.equal(buyTokens.map(token => buyAmounts.get(token)))
 }

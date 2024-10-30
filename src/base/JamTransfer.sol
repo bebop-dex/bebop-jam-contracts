@@ -40,13 +40,19 @@ abstract contract JamTransfer is JamPartner {
             if (tokens[i] == JamOrderLib.NATIVE_TOKEN) {
                 uint tokenBalance = address(this).balance;
                 require(tokenBalance >= amounts[i], InvalidOutputBalance(tokens[i], amounts[i], tokenBalance));
-                (bool sent, ) = payable(receiver).call{value: transferExactAmounts ? amounts[i] : tokenBalance}("");
+                if (!transferExactAmounts) {
+                    amounts[i] = tokenBalance;
+                }
+                (bool sent, ) = payable(receiver).call{value: amounts[i]}("");
                 require(sent, FailedToSendEth());
-                emit NativeTransfer(receiver, transferExactAmounts ? amounts[i] : tokenBalance);
+                emit NativeTransfer(receiver, amounts[i]);
             } else {
                 uint tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
                 require(tokenBalance >= amounts[i], InvalidOutputBalance(tokens[i], amounts[i], tokenBalance));
-                IERC20(tokens[i]).safeTransfer(receiver, transferExactAmounts ? amounts[i] : tokenBalance);
+                if (!transferExactAmounts) {
+                    amounts[i] = tokenBalance;
+                }
+                IERC20(tokens[i]).safeTransfer(receiver, amounts[i]);
             }
         }
     }

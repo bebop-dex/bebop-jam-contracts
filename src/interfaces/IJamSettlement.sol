@@ -24,7 +24,7 @@ interface IJamSettlement {
 
     /// @dev Event with same eventId as will be emitted by the BebopBlend contract for AggregateOrder using Order.extractEventId()
     event BebopBlendAggregateOrderFilled(
-        uint128 indexed eventId, address indexed receiver, address[][] sellTokens, address[][] buyTokens, uint256[][] sellAmounts, uint256[][] buyAmounts
+        uint128 indexed eventId, address indexed receiver, address[] sellTokens, address[] buyTokens, uint256[] sellAmounts, uint256[] buyAmounts
     );
 
     /// @dev Settle a jam order.
