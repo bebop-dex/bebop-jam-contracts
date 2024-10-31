@@ -50,6 +50,9 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
         require(JamInteraction.runInteractions(interactions, balanceManager), InteractionsFailed());
         uint256[] memory buyAmounts = order.buyAmounts;
         transferTokensFromContract(order.buyTokens, buyAmounts, order.receiver, order.partnerInfo, false);
+        if (order.receiver == address(this)){
+            require(!hasDuplicates(order.buyTokens), DuplicateTokens());
+        }
         if (hooksHash != JamHooks.EMPTY_HOOKS_HASH){
             require(JamInteraction.runInteractionsM(hooks.afterSettle, balanceManager), AfterSettleHooksFailed());
         }

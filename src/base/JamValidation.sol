@@ -167,4 +167,18 @@ abstract contract JamValidation {
             validateOrder(orders[i], signatures[i], noHooks ? JamHooks.EMPTY_HOOKS_HASH : JamHooks.hash(hooks[i]));
         }
     }
+
+    /// @notice Check if there are any duplicates in the array of tokens
+    /// @param tokens The array of tokens to validate
+    /// @return True if there are duplicates
+    function hasDuplicates(address[] calldata tokens) internal pure returns (bool) {
+        for (uint i; i < tokens.length - 1; ++i) {
+            for (uint j = i + 1; j < tokens.length; ++j) {
+                if (tokens[i] == tokens[j]) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 }

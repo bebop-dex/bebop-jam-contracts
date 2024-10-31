@@ -73,3 +73,6 @@ error InvalidFeePercentage();
 
 /// @notice Thrown when interactions contain call to balance manager
 error CallToBalanceManagerNotAllowed();
+
+/// @notice Thrown when there are duplicate buy tokens in the order
+error DuplicateTokens();
