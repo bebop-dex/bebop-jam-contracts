@@ -1,5 +1,6 @@
 import {AMOUNTS, AMOUNTS2, TOKENS} from "../config";
 import {JamOrderStruct} from "../../../typechain-types/artifacts/src/JamSettlement";
+import {BigNumber} from "ethers";
 
 
 
@@ -8,7 +9,7 @@ export function getOrder(
     takerAddress: string,
     executor: string,
     usingPermit2: boolean,
-    _partnerInfo: number | undefined = undefined,
+    _partnerInfo: BigNumber | undefined = undefined,
     _expiry: number | undefined = undefined,
     _exclusivityDeadline: number | undefined = undefined
 ): JamOrderStruct {
@@ -35,6 +36,15 @@ export function getOrder(
             buyAmounts: [AMOUNTS[TOKENS.USDC]]
         }
     }
+    if (orderType === "SimpleUSDT"){
+        return {
+            ...common,
+            sellTokens: [TOKENS.USDT],
+            buyTokens: [TOKENS.USDC],
+            sellAmounts: [AMOUNTS[TOKENS.USDT]],
+            buyAmounts: [AMOUNTS[TOKENS.USDC]]
+        }
+    }
     if (orderType === "UsingDaiPermit"){
         return {
             ...common,
@@ -51,15 +61,6 @@ export function getOrder(
             buyTokens: [TOKENS.USDC],
             sellAmounts: [AMOUNTS[TOKENS.AAVE]],
             buyAmounts: [AMOUNTS[TOKENS.USDC]]
-        }
-    }
-    if (orderType === "SimpleReverse"){
-        return {
-            ...common,
-            sellTokens: [TOKENS.USDC],
-            buyTokens: [TOKENS.WETH],
-            sellAmounts: [AMOUNTS[TOKENS.USDC]],
-            buyAmounts: [AMOUNTS[TOKENS.WETH]]
         }
     }
     if (orderType === "SellNative"){
@@ -123,24 +124,6 @@ export function getOrder(
             sellTokens: [TOKENS.USDC, TOKENS.YFI, TOKENS.MKR],
             buyAmounts: [AMOUNTS[TOKENS.WETH], AMOUNTS[TOKENS.LINK], AMOUNTS[TOKENS.WBTC]],
             sellAmounts: [AMOUNTS[TOKENS.USDC], AMOUNTS[TOKENS.YFI], AMOUNTS[TOKENS.MKR]]
-        }
-    }
-    if (orderType === "Permits-mix"){
-        return {
-            ...common,
-            sellTokens: [TOKENS.UNI, TOKENS.WETH, TOKENS.LINK, TOKENS.WBTC],
-            buyTokens: [TOKENS.USDC],
-            sellAmounts: [AMOUNTS[TOKENS.UNI], AMOUNTS[TOKENS.WETH], AMOUNTS[TOKENS.LINK], AMOUNTS[TOKENS.WBTC]],
-            buyAmounts: [AMOUNTS[TOKENS.USDC]]
-        }
-    }
-    if (orderType === "Permits-fresh-mix"){
-        return {
-            ...common,
-            sellTokens: [TOKENS.DYDX, TOKENS.WETH, TOKENS.SNX],
-            buyTokens: [TOKENS.USDC],
-            sellAmounts: [AMOUNTS[TOKENS.DYDX], AMOUNTS[TOKENS.WETH], AMOUNTS.SNX_1],
-            buyAmounts: [AMOUNTS[TOKENS.USDC]]
         }
     }
     throw new Error("Order type not supported")

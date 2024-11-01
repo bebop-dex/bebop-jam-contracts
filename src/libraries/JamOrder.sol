@@ -12,7 +12,7 @@ struct JamOrder {
     uint256 exclusivityDeadline; // if block.timestamp > exclusivityDeadline, then order can be executed by any executor
     uint256 nonce;
     address executor; // only msg.sender=executor is allowed to execute (if executor=address(0), then order can be executed by anyone)
-    uint256 partnerInfo; // partnerInfo is a packed struct of feePercent and feeRecipient
+    uint256 partnerInfo; // partnerInfo is a packed struct of [partnerAddress,partnerFee,protocolFee]
     address[] sellTokens;
     address[] buyTokens;
     uint256[] sellAmounts;

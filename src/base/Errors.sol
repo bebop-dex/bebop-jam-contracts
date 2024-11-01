@@ -42,7 +42,7 @@ error ZeroNonce();
 error InvalidFilledAmountsLength();
 
 /// @notice Thrown when filled amounts is less than previous amount
-error InvalidFilledAmounts();
+error InvalidFilledAmounts(uint256 expected, uint256 actual);
 
 /// @notice Thrown when length of signatures array is not equal to batch length
 error InvalidBatchSignaturesLength();
@@ -52,6 +52,9 @@ error InvalidBatchHooksLength();
 
 /// @notice Thrown when one of the orders in batch has settlement contract as receiver
 error InvalidReceiverInBatch();
+
+/// @notice Thrown when different fees are passed in batch
+error DifferentFeesInBatch();
 
 /// @notice Thrown when caller is not settlement contract
 error InvalidCaller();

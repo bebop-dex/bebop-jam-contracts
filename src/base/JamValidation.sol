@@ -147,7 +147,7 @@ abstract contract JamValidation {
         }
         require(filledAmounts.length == initialAmounts.length, InvalidFilledAmountsLength());
         for (uint256 i; i < filledAmounts.length; ++i) {
-            require(filledAmounts[i] >= initialAmounts[i], InvalidFilledAmounts());
+            require(filledAmounts[i] >= initialAmounts[i], InvalidFilledAmounts(initialAmounts[i], filledAmounts[i]));
         }
         return filledAmounts;
     }

@@ -49,16 +49,16 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
         }
         require(JamInteraction.runInteractions(interactions, balanceManager), InteractionsFailed());
         uint256[] memory buyAmounts = order.buyAmounts;
-        transferTokensFromContract(order.buyTokens, buyAmounts, order.receiver, order.partnerInfo, false);
+        transferTokensFromContract(order.buyTokens, order.buyAmounts, buyAmounts, order.receiver, order.partnerInfo, false);
         if (order.receiver == address(this)){
             require(!hasDuplicates(order.buyTokens), DuplicateTokens());
-        }
-        if (hooksHash != JamHooks.EMPTY_HOOKS_HASH){
-            require(JamInteraction.runInteractionsM(hooks.afterSettle, balanceManager), AfterSettleHooksFailed());
         }
         emit BebopJamOrderFilled(
             order.nonce, order.taker, order.sellTokens, order.buyTokens, order.sellAmounts, buyAmounts
         );
+        if (hooksHash != JamHooks.EMPTY_HOOKS_HASH){
+            require(JamInteraction.runInteractionsM(hooks.afterSettle, balanceManager), AfterSettleHooksFailed());
+        }
     }
 
 
@@ -81,14 +81,26 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
         } else {
             balanceManager.transferTokens(order.sellTokens, order.sellAmounts, order.taker, msg.sender);
         }
-        uint256[] calldata buyAmounts = validateFilledAmounts(filledAmounts, order.buyAmounts);
-        balanceManager.transferTokens(order.buyTokens, buyAmounts, msg.sender, order.receiver);
+        if (order.partnerInfo == 0){
+            uint256[] calldata buyAmounts = validateFilledAmounts(filledAmounts, order.buyAmounts);
+            balanceManager.transferTokens(order.buyTokens, buyAmounts, msg.sender, order.receiver);
+            emit BebopJamOrderFilled(order.nonce, order.taker, order.sellTokens, order.buyTokens, order.sellAmounts, buyAmounts);
+        } else {
+            (
+                uint256[] memory buyAmounts, uint256[] memory protocolFees, uint256[] memory partnerFees, address partner
+            ) = getUpdatedAmountsAndFees(filledAmounts, order.buyAmounts, order.partnerInfo);
+            balanceManager.transferTokens(order.buyTokens, buyAmounts, msg.sender, order.receiver);
+            if (protocolFees.length != 0){
+                balanceManager.transferTokens(order.buyTokens, protocolFees, msg.sender, protocolFeeAddress);
+            }
+            if (partnerFees.length != 0){
+                balanceManager.transferTokens(order.buyTokens, partnerFees, msg.sender, partner);
+            }
+            emit BebopJamOrderFilled(order.nonce, order.taker, order.sellTokens, order.buyTokens, order.sellAmounts, buyAmounts);
+        }
         if (hooksHash != JamHooks.EMPTY_HOOKS_HASH){
             require(JamInteraction.runInteractionsM(hooks.afterSettle, balanceManager), AfterSettleHooksFailed());
         }
-        emit BebopJamOrderFilled(
-            order.nonce, order.taker, order.sellTokens, order.buyTokens, order.sellAmounts, buyAmounts
-        );
     }
 
 
@@ -118,14 +130,14 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
         for (uint i; i < orders.length; ++i) {
             uint256[] memory buyAmounts = calculateNewAmounts(i, orders);
             transferTokensFromContract(
-                orders[i].buyTokens, buyAmounts, orders[i].receiver, orders[i].partnerInfo, true
+                orders[i].buyTokens, orders[i].buyAmounts, buyAmounts, orders[i].receiver, orders[i].partnerInfo, true
+            );
+            emit BebopJamOrderFilled(
+                orders[i].nonce, orders[i].taker, orders[i].sellTokens, orders[i].buyTokens, orders[i].sellAmounts, buyAmounts
             );
             if (executeHooks){
                 require(JamInteraction.runInteractions(hooks[i].afterSettle, balanceManager), AfterSettleHooksFailed());
             }
-            emit BebopJamOrderFilled(
-                orders[i].nonce, orders[i].taker, orders[i].sellTokens, orders[i].buyTokens, orders[i].sellAmounts, buyAmounts
-            );
         }
     }
 

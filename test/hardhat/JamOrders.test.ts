@@ -6,7 +6,7 @@ import {
 } from "../../typechain-types/artifacts/src/JamSettlement";
 import {PERMIT2_ADDRESS} from "./config";
 import {
-  approveTokens, batchVerifyBalancesAfter,
+  approveTokens, batchVerifyBalancesAfter, generatePartnerInfo,
   getAggregatedAmounts,
   getBalancesBefore,
   getBatchArrays, getBatchBalancesBefore,
@@ -44,7 +44,10 @@ describe("JamOrders", function () {
       directSettle: boolean = false,
       directSettleIncreasedAmounts: BigNumberish[] = [],
       userExcess: number = 0,
-      solverExcess: number = 1000
+      solverExcess: number = 1000,
+      protocolFee: BigNumber[] | undefined = undefined,
+      partnerFee: BigNumber[] | undefined = undefined,
+      partnerAddress: string = zeroAddress
   ) {
     const { user, settlement, solver, solverContract, directMaker } = fixture;
 
@@ -53,26 +56,42 @@ describe("JamOrders", function () {
         jamOrder.sellTokens, jamOrder.sellAmounts, user, jamOrder.usingPermit2 ? PERMIT2_ADDRESS: fixture.balanceManager.address
     )
 
-    let changedBuyAmounts;
+    let changedBuyAmounts: BigNumber[];
     if (directSettle) {
       changedBuyAmounts = JSON.parse(JSON.stringify(directSettleIncreasedAmounts.length > 0 ? directSettleIncreasedAmounts : jamOrder.buyAmounts))
+      if (protocolFee !== undefined) {
+        changedBuyAmounts = changedBuyAmounts.map((amount, i) => BigNumber.from(amount).sub(protocolFee[i]))
+      }
+      if (partnerFee !== undefined) {
+          changedBuyAmounts = changedBuyAmounts.map((amount, i) => BigNumber.from(amount).sub(partnerFee[i]))
+      }
     } else {
-      changedBuyAmounts = jamOrder.buyAmounts.map((amount) => BigNumber.from(amount).add(userExcess).toString())
+      changedBuyAmounts = jamOrder.buyAmounts.map((amount) => BigNumber.from(amount).add(userExcess))
     }
 
     let interactions: JamInteraction.DataStruct[];
     let executor = solver;
     if (usingSolverContract) {
+      let transferToJam: BigNumber[] = changedBuyAmounts
+      if (protocolFee !== undefined) {
+        transferToJam = transferToJam.map((amount, i) => BigNumber.from(amount).add(protocolFee[i]))
+      }
+      if (partnerFee !== undefined) {
+          transferToJam = transferToJam.map((amount, i) => BigNumber.from(amount).add(partnerFee[i]))
+      }
       let executeOnSolverContract = await solverContract.populateTransaction.simpleExecute(
-          solverCalls, jamOrder.buyTokens, changedBuyAmounts, settlement.address
+          solverCalls, jamOrder.buyTokens, transferToJam, settlement.address
       );
       let value = balanceRecipient === fixture.settlement.address ? nativeTokenAmount.toString() : "0"
       interactions = [
         { result: true, to: executeOnSolverContract.to!, data: executeOnSolverContract.data!, value: value }
       ]
-    } else {
+    } else if (!directSettle){
       executor = user
       interactions = solverCalls
+    } else {
+      executor = directMaker
+      interactions = []
     }
 
     let hooksHash = hooks === emptyHooks ? emptyHooksHash : utils.keccak256(
@@ -82,18 +101,24 @@ describe("JamOrders", function () {
     if (jamOrder.usingPermit2){
       signature = await signPermit2AndJam(user, jamOrder, hooksHash, fixture.balanceManager.address)
     } else {
-      signature = await signJamOrder(user, jamOrder, hooksHash, settlement);
+      if (executor.address === user.address){
+        signature = "0x"
+      } else {
+        signature = await signJamOrder(user, jamOrder, hooksHash, settlement);
+      }
     }
 
-    let [userBalancesBefore, solverBalancesBefore] = await getBalancesBefore(
-        jamOrder.buyTokens, jamOrder.receiver, solverContract.address
-    )
+    let userBalancesBefore = await getBalancesBefore(jamOrder.buyTokens, jamOrder.receiver)
+    let solverBalancesBefore = await getBalancesBefore(jamOrder.buyTokens, solverContract.address)
+    let partnerBalanceBefore  = await getBalancesBefore(jamOrder.buyTokens, partnerAddress)
+    let treasuryBalanceBefore  = await getBalancesBefore(jamOrder.buyTokens, fixture.treasuryAddress.address)
 
     let res;
     if (directSettle) {
       // approve directMaker tokens
-      await approveTokens(jamOrder.buyTokens, changedBuyAmounts, directMaker, fixture.balanceManager.address)
-      res = await settlement.connect(directMaker).settleInternal(
+      await approveTokens(jamOrder.buyTokens, directSettleIncreasedAmounts.length > 0 ?
+              directSettleIncreasedAmounts : changedBuyAmounts, directMaker, fixture.balanceManager.address)
+      res = await settlement.connect(executor).settleInternal(
           jamOrder, signature, directSettleIncreasedAmounts, "0x", {value: nativeTokenAmount.toString()}
       );
     } else {
@@ -101,8 +126,24 @@ describe("JamOrders", function () {
           jamOrder, signature, interactions, "0x", balanceRecipient, {value: nativeTokenAmount.toString()},
       );
     }
-    await verifyBalancesAfter(jamOrder.buyTokens,  jamOrder.receiver, changedBuyAmounts,
-        userBalancesBefore, solverBalancesBefore, settlement.address, solverContract.address, usingSolverContract, solverExcess)
+    await verifyBalancesAfter(
+        jamOrder.buyTokens,  jamOrder.receiver, jamOrder.receiver === fixture.settlement.address ?
+            changedBuyAmounts.map(_ => BigNumber.from(0)) : changedBuyAmounts, userBalancesBefore
+    )
+    await verifyBalancesAfter(
+        jamOrder.buyTokens,  solverContract.address, changedBuyAmounts.map(_ => usingSolverContract ?
+            BigNumber.from(solverExcess) : BigNumber.from(0)), solverBalancesBefore
+    )
+    if (protocolFee !== undefined){
+        await verifyBalancesAfter(
+            jamOrder.buyTokens, fixture.treasuryAddress.address, protocolFee, treasuryBalanceBefore
+        )
+    }
+    if (partnerFee !== undefined){
+      await verifyBalancesAfter(
+          jamOrder.buyTokens, partnerAddress, partnerFee, partnerBalanceBefore
+      )
+    }
     await expect(res).to.emit(settlement, "BebopJamOrderFilled").withArgs(
         jamOrder.nonce, jamOrder.receiver, jamOrder.sellTokens, jamOrder.buyTokens, jamOrder.sellAmounts, changedBuyAmounts
     )
@@ -153,6 +194,12 @@ describe("JamOrders", function () {
     bebop = fixture.bebopBlend
     hooksGenerator = new HooksGenerator(fixture.user)
   });
+
+  //-----------------------------------------
+  //
+  //               settle
+  //
+  // -----------------------------------------
 
   it('JAM: settle - Simple with Permit2', async function () {
       let jamOrder: JamOrderStruct = getOrder("Simple", fixture.user.address, fixture.solver.address, true)!
@@ -237,18 +284,122 @@ describe("JamOrders", function () {
     await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls)
   });
 
-  it('JAM: internalSettle - Simple with Permit2', async function () {
+  it('JAM: settle - Protocol fee', async function () {
+    let protocolFeeBps = 100
+    let partnerInfo  = generatePartnerInfo(zeroAddress, 0, protocolFeeBps)
+    let jamOrder: JamOrderStruct = getOrder("Simple", fixture.user.address, fixture.solver.address, true, partnerInfo)!
+    let feeExcess = jamOrder.buyAmounts.map(amount =>
+        BigNumber.from(amount).mul(10000).div(10000 - protocolFeeBps).sub(BigNumber.from(amount)))
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker, feeExcess)
+    await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, true,
+        false, [], 0, 0, feeExcess)
+  });
+
+  it('JAM: settle - Partner fee', async function () {
+    let partnerFeeBps = 123
+    let partnerInfo  = generatePartnerInfo(fixture.anotherUser.address, partnerFeeBps, 0)
+    let jamOrder: JamOrderStruct = getOrder("Simple", fixture.user.address, fixture.solver.address, true, partnerInfo)!
+    let feeExcess = jamOrder.buyAmounts.map(amount =>
+        BigNumber.from(amount).mul(10000).div(10000 - partnerFeeBps).sub(BigNumber.from(amount)))
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker, feeExcess)
+    await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, true,
+        false, [], 0, 0, undefined, feeExcess, fixture.anotherUser.address)
+  });
+
+  it('JAM: settle - Protocol fee & Partner fee', async function () {
+    let protocolFeeBps = 100
+    let partnerFeeBps = 200
+    let partnerInfo  = generatePartnerInfo(fixture.anotherUser.address, partnerFeeBps, protocolFeeBps)
+    let jamOrder: JamOrderStruct = getOrder("Simple", fixture.user.address, fixture.solver.address, true, partnerInfo)!
+    let feeExcess = jamOrder.buyAmounts.map(amount =>
+        BigNumber.from(amount).mul(10000).div(10000 - partnerFeeBps - protocolFeeBps).sub(BigNumber.from(amount)))
+    let protocolFee = feeExcess.map(amount => BigNumber.from(amount).mul(protocolFeeBps).div(protocolFeeBps + partnerFeeBps))
+    let partnerFee = feeExcess.map(amount => BigNumber.from(amount).mul(partnerFeeBps).div(protocolFeeBps + partnerFeeBps))
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker, feeExcess)
+    await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, true,
+        false, [], 0, 0, protocolFee, partnerFee, fixture.anotherUser.address)
+  });
+
+  it('JAM: settle - Protocol fee & Partner fee without solver contract', async function () {
+    let protocolFeeBps = 400
+    let partnerFeeBps = 400
+    let partnerInfo  = generatePartnerInfo(fixture.anotherUser.address, partnerFeeBps, protocolFeeBps)
+    let jamOrder: JamOrderStruct = getOrder("SimpleUSDT", fixture.user.address, zeroAddress, false, partnerInfo)!
+    let feeExcess = jamOrder.buyAmounts.map(amount =>
+        BigNumber.from(amount).mul(10000).div(10000 - partnerFeeBps - protocolFeeBps).sub(BigNumber.from(amount)))
+    let protocolFee = feeExcess.map(amount => BigNumber.from(amount).mul(protocolFeeBps).div(protocolFeeBps + partnerFeeBps))
+    let partnerFee = feeExcess.map(amount => BigNumber.from(amount).mul(partnerFeeBps).div(protocolFeeBps + partnerFeeBps))
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.settlement.address, fixture.bebopMaker, feeExcess)
+    await settle(jamOrder, fixture.settlement.address, emptyHooks, solverCalls, false, false,
+        [], 0, 0, protocolFee, partnerFee, fixture.anotherUser.address)
+  });
+
+
+  //-----------------------------------------
+  //
+  //               settleInternal
+  //
+  // -----------------------------------------
+
+  it('JAM: settleInternal - Simple with Permit2', async function () {
       let jamOrder: JamOrderStruct = getOrder("Simple", fixture.user.address, fixture.directMaker.address, true)!
-      let solverCalls: JamInteraction.DataStruct[] = []
-      await settle(jamOrder, "0x", emptyHooks, solverCalls,false, true)
+      await settle(jamOrder, "0x", emptyHooks, [],false, true)
   });
 
-  it('JAM: internalSettle - Simple with standard approvals', async function () {
+  it('JAM: settleInternal - Simple with standard approvals', async function () {
     let jamOrder: JamOrderStruct = getOrder("Simple", fixture.user.address, fixture.directMaker.address, false)!
-    let solverCalls: JamInteraction.DataStruct[] = []
-    await settle(jamOrder, "0x", emptyHooks, solverCalls,false, true)
+    await settle(jamOrder, "0x", emptyHooks, [],false, true)
   });
 
+  it('JAM: settleInternal - Many-to-One with Permit2', async function () {
+    let jamOrder: JamOrderStruct = getOrder("Many-to-One", fixture.user.address, fixture.directMaker.address, true)!
+    await settle(jamOrder, "0x", emptyHooks, [],false, true)
+  });
+
+  it('JAM: settleInternal - One-to-Many with fees', async function () {
+    let protocolFeeBps = 200
+    let partnerFeeBps = 300
+    let partnerInfo  = generatePartnerInfo(fixture.anotherUser.address, partnerFeeBps, protocolFeeBps)
+    let jamOrder: JamOrderStruct = getOrder("One-to-Many", fixture.user.address, fixture.directMaker.address, false, partnerInfo)!
+    let feeExcess = jamOrder.buyAmounts.map(amount =>
+        BigNumber.from(amount).mul(10000).div(10000 - partnerFeeBps - protocolFeeBps).sub(BigNumber.from(amount)))
+    let protocolFee = feeExcess.map(amount => BigNumber.from(amount).mul(protocolFeeBps).div(protocolFeeBps + partnerFeeBps))
+    let partnerFee = feeExcess.map(amount => BigNumber.from(amount).mul(partnerFeeBps).div(protocolFeeBps + partnerFeeBps))
+    let increasedBuyAmounts = jamOrder.buyAmounts.map(amount =>
+        BigNumber.from(amount).mul(10000).div(10000 - partnerFeeBps - protocolFeeBps))
+    await settle(jamOrder, "0x", emptyHooks, [],false, true, increasedBuyAmounts,
+        0, 0, protocolFee, partnerFee, fixture.anotherUser.address)
+  });
+
+  it('JAM: settleInternal - One-to-Many with increased amounts', async function () {
+    let jamOrder: JamOrderStruct = getOrder("One-to-Many", fixture.user.address, fixture.directMaker.address, false)!
+    let increasedBuyAmounts = jamOrder.buyAmounts.map(a => BigNumber.from(a).add(1000))
+    await settle(jamOrder, "0x", emptyHooks, [],false, true, increasedBuyAmounts)
+  });
+
+  it('JAM: settleInternal - One-to-Many with increased amounts and big fees', async function () {
+    let protocolFeeBps = 4000
+    let partnerFeeBps = 5000
+    let partnerInfo  = generatePartnerInfo(fixture.anotherUser.address, partnerFeeBps, protocolFeeBps)
+    let jamOrder: JamOrderStruct = getOrder("One-to-Many", fixture.user.address, fixture.directMaker.address, false, partnerInfo)!
+    let userExcess = 12345
+    let amountsWithUserExcess = jamOrder.buyAmounts.map(a => BigNumber.from(a).add(userExcess))
+    let feeExcess = amountsWithUserExcess.map(amount =>
+        BigNumber.from(amount).mul(10000).div(10000 - partnerFeeBps - protocolFeeBps).sub(BigNumber.from(amount)))
+    let protocolFee = feeExcess.map(amount => BigNumber.from(amount).mul(protocolFeeBps).div(protocolFeeBps + partnerFeeBps))
+    let partnerFee = feeExcess.map(amount => BigNumber.from(amount).mul(partnerFeeBps).div(protocolFeeBps + partnerFeeBps))
+    let increasedBuyAmounts = amountsWithUserExcess.map(amount =>
+        BigNumber.from(amount).mul(10000).div(10000 - partnerFeeBps - protocolFeeBps))
+    await settle(jamOrder, "0x", emptyHooks, [],false, true, increasedBuyAmounts,
+        userExcess, 0, protocolFee, partnerFee, fixture.anotherUser.address)
+  });
+
+
+  //-----------------------------------------
+  //
+  //               settleBatch
+  //
+  // -----------------------------------------
 
   it('JAM: settleBatch - Simple', async function () {
     let jamOrders: JamOrderStruct[] = [
@@ -262,6 +413,15 @@ describe("JamOrders", function () {
 
     await batchSettle([fixture.user, fixture.anotherUser], jamOrders, allSolverCalls, fixture.solverContract.address)
   });
+
+
+
+
+
+
+
+
+
 
   //
   // it('settleInternal', async function () {

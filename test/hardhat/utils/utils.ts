@@ -5,7 +5,7 @@ import {expect} from "chai";
 import {NATIVE_TOKEN, TOKENS} from "../config";
 import {JamHooks, JamOrderStruct} from "../../../typechain-types/artifacts/src/JamSettlement";
 import {BlendAggregateOrderStruct} from "../../../typechain-types/artifacts/src/interfaces/IBebopBlend";
-import {getEventId} from "../blend/blendUtils";
+import {generateEventId, getEventId, getPartnerId} from "../blend/blendUtils";
 
 
 export function generateExpiry(){
@@ -28,53 +28,33 @@ export async function approveTokens(
 }
 
 export async function getBalancesBefore(
-    tokens: string[], receiver: string, solverAddress: string
+    tokens: string[], address: string
 ) {
-    let userBalancesBefore: {[id:string]: BigNumberish} = {}
-    let solverBalancesBefore: {[id:string]: BigNumberish} = {}
+    let balancesBefore: {[id:string]: BigNumberish} = {}
     for (let [i, token] of tokens.entries()) {
         if (tokens[i] === NATIVE_TOKEN) {
-            userBalancesBefore[token] = await ethers.provider.getBalance(receiver)
-            solverBalancesBefore[token] = await ethers.provider.getBalance(solverAddress)
+            balancesBefore[token] = await ethers.provider.getBalance(address)
         } else {
-            userBalancesBefore[token] = await (await ethers.getContractAt("IERC20", token)).balanceOf(receiver)
-            solverBalancesBefore[token] = await (await ethers.getContractAt("IERC20", token)).balanceOf(solverAddress)
+            balancesBefore[token] = await (await ethers.getContractAt("IERC20", token)).balanceOf(address)
         }
     }
-    return [userBalancesBefore, solverBalancesBefore]
+    return balancesBefore
 }
-
 
 export async function verifyBalancesAfter(
     tokens: string[],
-    receiver: string,
+    address: string,
     amounts: BigNumberish[],
-    userBalancesBefore: {[id:string]: BigNumberish},
-    solverBalancesBefore: {[id:string]: BigNumberish},
-    settlementAddr: string,
-    solverAddress: string,
-    usingSolverContract: boolean = false,
-    solverExcess: BigNumberish = BigNumber.from(0)
-){
+    balancesBefore: {[id:string]: BigNumberish},
+) {
     for (let [i, token] of tokens.entries()) {
-        let userBalanceAfter;
-        let solverBalanceAfter;
-
+        let balanceAfter;
         if (tokens[i] === NATIVE_TOKEN) {
-            userBalanceAfter = await ethers.provider.getBalance(receiver)
-            solverBalanceAfter = await ethers.provider.getBalance(solverAddress)
+            balanceAfter = await ethers.provider.getBalance(address)
         } else {
-            userBalanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(receiver)
-            solverBalanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(solverAddress)
-            if (usingSolverContract){
-                expect(solverBalanceAfter.sub(solverBalancesBefore[token])).to.be.equal(solverExcess)
-            }
+            balanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(address)
         }
-        if (receiver === settlementAddr) {
-            expect(userBalanceAfter.sub(userBalancesBefore[token])).to.be.equal(BigNumber.from(0))
-        } else {
-            expect(userBalanceAfter.sub(userBalancesBefore[token])).to.be.equal(BigNumber.from(amounts[i]))
-        }
+        expect(balanceAfter.sub(balancesBefore[token])).to.be.equal(BigNumber.from(amounts[i]))
     }
 }
 
@@ -84,8 +64,9 @@ export async function getBatchBalancesBefore(
     // todo: allow verifying balances if taker has two reversed orders, e.g. USDC->WETH and WETH->USDC
     let allBalancesBefore: {[id:string]: {[id:string]: BigNumberish}} = {};
     for (let [i, order] of jamOrders.entries()){
-        let [userBalancesBefore, _] = await getBalancesBefore(
-            order.buyTokens, order.receiver, solverAddress)
+        let userBalancesBefore= await getBalancesBefore(
+            order.buyTokens, order.receiver
+        )
         if (allBalancesBefore[order.receiver] === undefined){
             allBalancesBefore[order.receiver] = {}
         }
@@ -182,4 +163,8 @@ export function assertBlendAggregateEvent(
         buyAmounts.set(TOKENS.WETH, buyAmounts.get(NATIVE_TOKEN)!)
     }
     expect(eventArgs.buyAmounts).to.be.deep.equal(buyTokens.map(token => buyAmounts.get(token)))
+}
+
+export function generatePartnerInfo(partnerAddress: string, partnerFeeBps: number, protocolFeeBps: number) {
+    return BigNumber.from(partnerAddress).shl(32).or(BigNumber.from(partnerFeeBps).shl(16)).or(BigNumber.from(protocolFeeBps))
 }

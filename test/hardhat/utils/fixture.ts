@@ -53,7 +53,7 @@ export async function getFixture () {
     ],
   });
 
-  const [deployer, solver, executor, user, anotherUser, bebopMaker, bebopMaker2, bebopMaker3, directMaker, ...users] = await ethers.getSigners();
+  const [deployer, solver, executor, user, anotherUser, bebopMaker, bebopMaker2, bebopMaker3, directMaker, treasuryAddress,, ...users] = await ethers.getSigners();
 
   const bebopBlend = await waffle.deployContract(deployer, BebopSettlementABI, [
     TOKENS.WETH,
@@ -62,7 +62,7 @@ export async function getFixture () {
   ]) as BebopSettlement;
 
   const JamSettlement = await ethers.getContractFactory("JamSettlement");
-  const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS, bebopBlend.address, deployer.address);
+  const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS, bebopBlend.address, treasuryAddress.address);
   await settlement.deployed();
 
   const JamSolver = await ethers.getContractFactory("JamSolver");
@@ -96,6 +96,7 @@ export async function getFixture () {
     settlement,
     balanceManager,
     directMaker,
-    bebopBlend
+    bebopBlend,
+    treasuryAddress,
   }
 }

@@ -19,8 +19,14 @@ export async function getBebopSolverCalls(
     bebop: BebopSettlement,
     takerAddress: string,
     maker: SignerWithAddress,
-    solverExcess: number = 1000
+    _solverExcess: BigNumber[] | number = 1000
 ): Promise<JamInteraction.DataStruct[]> {
+    let solverExcess: BigNumber[] = []
+    if (typeof _solverExcess === "number"){
+        solverExcess = Array(jamOrder.buyTokens.length).fill(BigNumber.from(_solverExcess))
+    } else {
+        solverExcess = _solverExcess
+    }
     const taker_address = takerAddress;
     const maker_address = maker.address;
     const taker_amounts = [];
@@ -30,7 +36,7 @@ export async function getBebopSolverCalls(
     let takerCommands: BlendCommand[] = []
     let makerCommands: BlendCommand[] = []
     for (let i = 0; i < jamOrder.buyTokens.length; i++){
-        maker_amounts.push(BigNumber.from(jamOrder.buyAmounts[i]).add(solverExcess).toString());
+        maker_amounts.push(BigNumber.from(jamOrder.buyAmounts[i]).add(solverExcess[i]).toString());
         if (jamOrder.buyTokens[i] === TOKENS.ETH){
             maker_tokens.push(TOKENS.WETH)
             makerCommands.push(BlendCommand.NATIVE_TRANSFER)

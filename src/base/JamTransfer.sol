@@ -23,35 +23,32 @@ abstract contract JamTransfer is JamPartner {
 
     /// @dev After solver settlement, transfer tokens from this contract to receiver
     /// @param tokens tokens' addresses
-    /// @param amounts tokens' amounts
+    /// @param minAmounts minimum amounts from order
+    /// @param amounts tokens' filled amounts
     /// @param receiver address
     /// @param transferExactAmounts if true, transfer exact amounts, otherwise transfer full tokens balance
     function transferTokensFromContract(
         address[] calldata tokens,
+        uint256[] calldata minAmounts,
         uint256[] memory amounts,
         address receiver,
         uint256 partnerInfo,
         bool transferExactAmounts
     ) internal {
         for (uint i; i < tokens.length; ++i) {
-            if (partnerInfo != 0){
-                distributeFees(partnerInfo, tokens[i], amounts[i]);
+            if (!transferExactAmounts) {
+                amounts[i] = tokens[i] == JamOrderLib.NATIVE_TOKEN ?
+                    address(this).balance : IERC20(tokens[i]).balanceOf(address(this));
             }
+            if (partnerInfo != 0){
+                amounts[i] -= distributeFees(partnerInfo, tokens[i], amounts[i]);
+            }
+            require(amounts[i] >= minAmounts[i], InvalidOutputBalance(tokens[i], minAmounts[i], amounts[i]));
             if (tokens[i] == JamOrderLib.NATIVE_TOKEN) {
-                uint tokenBalance = address(this).balance;
-                require(tokenBalance >= amounts[i], InvalidOutputBalance(tokens[i], amounts[i], tokenBalance));
-                if (!transferExactAmounts) {
-                    amounts[i] = tokenBalance;
-                }
                 (bool sent, ) = payable(receiver).call{value: amounts[i]}("");
                 require(sent, FailedToSendEth());
                 emit NativeTransfer(receiver, amounts[i]);
             } else {
-                uint tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
-                require(tokenBalance >= amounts[i], InvalidOutputBalance(tokens[i], amounts[i], tokenBalance));
-                if (!transferExactAmounts) {
-                    amounts[i] = tokenBalance;
-                }
                 IERC20(tokens[i]).safeTransfer(receiver, amounts[i]);
             }
         }
@@ -78,13 +75,17 @@ abstract contract JamTransfer is JamPartner {
                 for (uint k; k < orders[j].buyTokens.length; ++k) {
                     if (orders[j].buyTokens[k] == curOrder.buyTokens[i]) {
                         fullAmount += orders[j].buyAmounts[k];
+                        require(
+                            getTotalFeesBps(curOrder.partnerInfo) == getTotalFeesBps(orders[j].partnerInfo),
+                            DifferentFeesInBatch()
+                        );
                     }
                 }
             }
             uint256 tokenBalance = curOrder.buyTokens[i] == JamOrderLib.NATIVE_TOKEN ?
                 address(this).balance : IERC20(curOrder.buyTokens[i]).balanceOf(address(this));
             // if at least two takers buy same token, we need to divide the whole tokenBalance among them.
-            // for edge case with newAmounts[i] overflow, solver should submit tx with transferExactAmounts=true
+            // for edge case with newAmounts[i] overflow, solver shouldn't submit txs in a batch
             newAmounts[i] = tokenBalance * curOrder.buyAmounts[i] / fullAmount;
             if (newAmounts[i] < curOrder.buyAmounts[i]) {
                 newAmounts[i] = curOrder.buyAmounts[i];
