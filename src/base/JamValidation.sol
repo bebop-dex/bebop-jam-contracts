@@ -13,8 +13,8 @@ abstract contract JamValidation {
     mapping(address => mapping(uint256 => uint256)) private limitOrdersNonces;
     uint256 private constant INF_EXPIRY = 9999999999; // expiry for limit orders
 
-    bytes32 private constant DOMAIN_NAME = keccak256("JamSettlement");
-    bytes32 private constant DOMAIN_VERSION = keccak256("2");
+    bytes32 public constant DOMAIN_NAME = keccak256("JamSettlement");
+    bytes32 public constant DOMAIN_VERSION = keccak256("2");
     bytes32 private constant UPPER_BIT_MASK = (0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
     bytes4 private constant EIP1271_MAGICVALUE = bytes4(keccak256("isValidSignature(bytes32,bytes)"));
     bytes32 public constant EIP712_DOMAIN_TYPEHASH = keccak256(abi.encodePacked(

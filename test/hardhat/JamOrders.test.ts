@@ -6,6 +6,7 @@ import {
 } from "../../typechain-types/artifacts/src/JamSettlement";
 import {PERMIT2_ADDRESS} from "./config";
 import {
+  addFeesAmounts,
   approveTokens, batchVerifyBalancesAfter, generatePartnerInfo,
   getAggregatedAmounts,
   getBalancesBefore,
@@ -132,7 +133,7 @@ describe("JamOrders", function () {
     )
     await verifyBalancesAfter(
         jamOrder.buyTokens,  solverContract.address, changedBuyAmounts.map(_ => usingSolverContract ?
-            BigNumber.from(solverExcess) : BigNumber.from(0)), solverBalancesBefore
+            BigNumber.from(solverExcess) : BigNumber.from(0)), solverBalancesBefore, 1
     )
     if (protocolFee !== undefined){
         await verifyBalancesAfter(
@@ -154,7 +155,10 @@ describe("JamOrders", function () {
       jamOrders: JamOrderStruct[],
       batchSolverCalls: JamInteraction.DataStruct[],
       balanceRecipient: string,
-      takerGetExcess: boolean = false
+      userExcess: number = 0,
+      protocolFees: BigNumber[][] | undefined = undefined,
+      partnerFees: BigNumber[][] | undefined = undefined,
+      partnerAddresses: string[] = []
   ) {
     const {  settlement, solver, solverContract } = fixture;
 
@@ -164,8 +168,7 @@ describe("JamOrders", function () {
     }
 
     let executor = solver;
-    let solverExcess = 1000
-    let [batchAmounts, batchAddresses] = getBatchArrays(jamOrders, takerGetExcess ? solverExcess : 0)
+    let [batchAmounts, batchAddresses] = getBatchArrays(jamOrders, userExcess, protocolFees, partnerFees)
     let executeOnSolverContract = await solverContract.populateTransaction.simpleExecute(
         batchSolverCalls, batchAddresses, batchAmounts, settlement.address
     );
@@ -182,11 +185,17 @@ describe("JamOrders", function () {
       }
     }
     let aggregatedBuyAmounts = getAggregatedAmounts(jamOrders)
-    let allBalancesBefore = await getBatchBalancesBefore(jamOrders, solverContract.address)
+    if (protocolFees !== undefined){
+      addFeesAmounts(aggregatedBuyAmounts, jamOrders, protocolFees, jamOrders.map(_ => fixture.treasuryAddress.address))
+    }
+    if (partnerFees !== undefined){
+      addFeesAmounts(aggregatedBuyAmounts, jamOrders, partnerFees, partnerAddresses)
+    }
+    let allBalancesBefore = await getBatchBalancesBefore(jamOrders, [fixture.treasuryAddress.address,...partnerAddresses])
     await settlement.connect(executor).settleBatch(
         jamOrders, signatures, interactions, [], balanceRecipient, {value: "0"}
     )
-    await batchVerifyBalancesAfter(solverContract.address, settlement.address, solverExcess, allBalancesBefore, aggregatedBuyAmounts, takerGetExcess)
+    await batchVerifyBalancesAfter(allBalancesBefore, aggregatedBuyAmounts)
   }
 
   before(async () => {
@@ -334,6 +343,23 @@ describe("JamOrders", function () {
         [], 0, 0, protocolFee, partnerFee, fixture.anotherUser.address)
   });
 
+  it('JAM: settle - Protocol&Partner fee and userExcess', async function () {
+    let protocolFeeBps = 100
+    let partnerFeeBps = 200
+    let userExcess = 12345
+    let partnerInfo  = generatePartnerInfo(fixture.anotherUser.address, partnerFeeBps, protocolFeeBps)
+    let jamOrder: JamOrderStruct = getOrder("Simple", fixture.user.address, fixture.solver.address, true, partnerInfo)!
+    let amountsWithUserExcess: BigNumber[] = jamOrder.buyAmounts.map(a => BigNumber.from(a).add(userExcess))
+    let feeExcess = amountsWithUserExcess.map(amount =>
+        BigNumber.from(amount).mul(10000).div(10000 - partnerFeeBps - protocolFeeBps).sub(BigNumber.from(amount)))
+    let protocolFee = feeExcess.map(amount => BigNumber.from(amount).mul(protocolFeeBps).div(protocolFeeBps + partnerFeeBps))
+    let partnerFee = feeExcess.map(amount => BigNumber.from(amount).mul(partnerFeeBps).div(protocolFeeBps + partnerFeeBps))
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address,
+        fixture.bebopMaker, feeExcess.map(amount => amount.add(userExcess)))
+    await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, true,
+        false, [], userExcess, 0, protocolFee, partnerFee, fixture.anotherUser.address)
+  });
+
 
   //-----------------------------------------
   //
@@ -377,7 +403,7 @@ describe("JamOrders", function () {
     await settle(jamOrder, "0x", emptyHooks, [],false, true, increasedBuyAmounts)
   });
 
-  it('JAM: settleInternal - One-to-Many with increased amounts and big fees', async function () {
+  it('JAM: settleInternal - One-to-Many with increased amounts and fees', async function () {
     let protocolFeeBps = 4000
     let partnerFeeBps = 5000
     let partnerInfo  = generatePartnerInfo(fixture.anotherUser.address, partnerFeeBps, protocolFeeBps)
@@ -413,6 +439,60 @@ describe("JamOrders", function () {
 
     await batchSettle([fixture.user, fixture.anotherUser], jamOrders, allSolverCalls, fixture.solverContract.address)
   });
+
+  it('JAM: settleBatch - Partner&Protocol fee', async function () {
+    let protocolFeeBps = 200
+    let partnerFeeBps = 300
+    let partners = [fixture.deployer.address, fixture.deployer.address]
+    let jamOrders: JamOrderStruct[] = [
+      getOrder("Simple", fixture.user.address, fixture.solver.address, false,
+          generatePartnerInfo(partners[0], partnerFeeBps, protocolFeeBps))!,
+      getOrder("SimpleUSDT", fixture.anotherUser.address, fixture.solver.address, true,
+          generatePartnerInfo(partners[1], partnerFeeBps, protocolFeeBps))!,
+    ]
+    let allSolverCalls: JamInteraction.DataStruct[] = []
+    let protocolFees: BigNumber[][] = []
+    let partnerFees: BigNumber[][] = []
+    for (let jamOrder of jamOrders){
+        let feeExcess = jamOrder.buyAmounts.map(amount =>
+          BigNumber.from(amount).mul(10000).div(10000 - partnerFeeBps - protocolFeeBps).sub(BigNumber.from(amount)))
+        protocolFees.push(feeExcess.map(amount => BigNumber.from(amount).mul(protocolFeeBps).div(protocolFeeBps + partnerFeeBps)))
+        partnerFees.push(feeExcess.map((amount, i) => amount.sub(protocolFees[protocolFees.length - 1][i])))
+        allSolverCalls.push(...await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker, feeExcess))
+    }
+
+    await batchSettle([fixture.user, fixture.anotherUser], jamOrders, allSolverCalls, fixture.solverContract.address, 0,
+        protocolFees, partnerFees, partners)
+  });
+
+  it('JAM: settleBatch - One-to-Many with fees and excess', async function () {
+    let protocolFeeBps = [300, 200]
+    let partnerFeeBps = [100, 200]
+    let partners = [fixture.deployer.address, fixture.directMaker.address]
+    let jamOrders: JamOrderStruct[] = [
+      getOrder("One-to-Many", fixture.user.address, fixture.solver.address, true,
+          generatePartnerInfo(partners[0], partnerFeeBps[0], protocolFeeBps[0]))!,
+      getOrder("SimpleWETH", fixture.anotherUser.address, fixture.solver.address, false,
+          generatePartnerInfo(partners[1], partnerFeeBps[1], protocolFeeBps[1]))!,
+    ]
+    let allSolverCalls: JamInteraction.DataStruct[] = []
+    let protocolFees: BigNumber[][] = []
+    let partnerFees: BigNumber[][] = []
+    let userExcess = 1000
+    let amountsWithUserExcess: BigNumber[][] = jamOrders.map(jamOrder => jamOrder.buyAmounts.map(a => BigNumber.from(a).add(userExcess)))
+    for (let [ind, jamOrder] of jamOrders.entries()){
+      let feeExcess = amountsWithUserExcess[ind].map((amount, i) =>
+          BigNumber.from(amount).mul(10000).div(10000 - partnerFeeBps[ind] - protocolFeeBps[ind]).sub(BigNumber.from(amount)))
+      protocolFees.push(feeExcess.map(amount => BigNumber.from(amount).mul(protocolFeeBps[ind]).div(protocolFeeBps[ind] + partnerFeeBps[ind])))
+      partnerFees.push(feeExcess.map((amount, i) => amount.sub(protocolFees[protocolFees.length - 1][i])))
+      allSolverCalls.push(...await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker,
+          feeExcess.map(amount => amount.add(userExcess))))
+    }
+
+    await batchSettle([fixture.user, fixture.anotherUser], jamOrders, allSolverCalls, fixture.solverContract.address, userExcess,
+        protocolFees, partnerFees, partners)
+  });
+
 
 
 

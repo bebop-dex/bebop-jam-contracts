@@ -36,13 +36,22 @@ export function getOrder(
             buyAmounts: [AMOUNTS[TOKENS.USDC]]
         }
     }
+    if (orderType === "SimpleWETH"){
+        return {
+            ...common,
+            sellTokens: [TOKENS.USDC],
+            buyTokens: [TOKENS.WETH],
+            sellAmounts: [AMOUNTS[TOKENS.USDC]],
+            buyAmounts: [AMOUNTS[TOKENS.WETH]]
+        }
+    }
     if (orderType === "SimpleUSDT"){
         return {
             ...common,
             sellTokens: [TOKENS.USDT],
             buyTokens: [TOKENS.USDC],
-            sellAmounts: [AMOUNTS[TOKENS.USDT]],
-            buyAmounts: [AMOUNTS[TOKENS.USDC]]
+            sellAmounts: [AMOUNTS2[TOKENS.USDT]],
+            buyAmounts: [AMOUNTS2[TOKENS.USDC]]
         }
     }
     if (orderType === "UsingDaiPermit"){

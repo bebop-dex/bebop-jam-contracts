@@ -46,6 +46,7 @@ export async function verifyBalancesAfter(
     address: string,
     amounts: BigNumberish[],
     balancesBefore: {[id:string]: BigNumberish},
+    accuracy: number = 0
 ) {
     for (let [i, token] of tokens.entries()) {
         let balanceAfter;
@@ -54,61 +55,61 @@ export async function verifyBalancesAfter(
         } else {
             balanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(address)
         }
-        expect(balanceAfter.sub(balancesBefore[token])).to.be.equal(BigNumber.from(amounts[i]))
+        if (accuracy === 0){
+            expect(balanceAfter.sub(balancesBefore[token])).to.be.equal(BigNumber.from(amounts[i]))
+        } else {
+            expect(balanceAfter.sub(balancesBefore[token])).to.be.lte(BigNumber.from(amounts[i]).add(accuracy))
+        }
     }
 }
 
 export async function getBatchBalancesBefore(
-    jamOrders: JamOrderStruct[], solverAddress: string
+    jamOrders: JamOrderStruct[], partnerAddresses: string[]
 ): Promise<{[id:string]: {[id:string]: BigNumberish}}> {
-    // todo: allow verifying balances if taker has two reversed orders, e.g. USDC->WETH and WETH->USDC
     let allBalancesBefore: {[id:string]: {[id:string]: BigNumberish}} = {};
     for (let [i, order] of jamOrders.entries()){
-        let userBalancesBefore= await getBalancesBefore(
-            order.buyTokens, order.receiver
-        )
-        if (allBalancesBefore[order.receiver] === undefined){
-            allBalancesBefore[order.receiver] = {}
-        }
+        let userBalancesBefore= await getBalancesBefore(order.buyTokens, order.receiver)
+        if (allBalancesBefore[order.receiver] === undefined){ allBalancesBefore[order.receiver] = {}}
         for (let [token, balance] of Object.entries(userBalancesBefore)){
             allBalancesBefore[order.receiver][token] = balance
         }
+        for (let partner of partnerAddresses){
+            let partnerBalancesBefore = await getBalancesBefore(order.buyTokens, partner)
+            if (allBalancesBefore[partner] === undefined){ allBalancesBefore[partner] = {}}
+            for (let [token, balance] of Object.entries(partnerBalancesBefore)){
+                allBalancesBefore[partner][token] = balance
+            }
+        }
     }
+
     return allBalancesBefore
 }
 
 export async function batchVerifyBalancesAfter(
-    solverAddress: string,
-    settlementAddr: string,
-    solverExcess: BigNumberish,
     allBalancesBefore: {[id:string]: {[id:string]: BigNumberish}},
     aggregatedAmounts: {[id: string]: {[id: string]: BigNumberish}},
-    takerGetExcess: boolean = false
 ){
-    // todo: add verification for other tokens types
-    for (let [user, aggAmounts] of Object.entries(aggregatedAmounts)) {
+    for (let [wallet, aggAmounts] of Object.entries(aggregatedAmounts)) {
         for (let [token, amount] of Object.entries(aggAmounts)) {
-            let userBalanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(user)
+            let walletBalanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(wallet)
             //let solverBalanceAfter = await (await ethers.getContractAt("IERC20", token)).balanceOf(solverAddress)
 
-            if (user === settlementAddr) {
-                expect(userBalanceAfter.sub(allBalancesBefore[user][token])).to.be.equal(BigNumber.from(0))
-            } else {
-                let delta = userBalanceAfter.sub(allBalancesBefore[user][token])
-                let expectedDelta = BigNumber.from(amount).add(takerGetExcess ? solverExcess : 0);
-                expect(expectedDelta.sub(delta)).to.be.lte(1)
-            }
+            let delta = walletBalanceAfter.sub(allBalancesBefore[wallet][token])
+            let expectedDelta = BigNumber.from(amount);
+            expect(expectedDelta.sub(delta)).to.be.lte(1)
         }
     }
 }
 
 
-export function getBatchArrays(orders: JamOrderStruct[], takerExcess: BigNumberish): [BigNumberish[], string[]] {
+export function getBatchArrays(
+    orders: JamOrderStruct[], takerExcess: BigNumberish, protocolFees: BigNumber[][] | undefined = undefined, partnerFees: BigNumber[][] | undefined = undefined
+): [BigNumberish[], string[]] {
     let batchAmounts: BigNumberish[] = []
     let batchAddresses: string[] = []
     for (let [ind, order] of orders.entries()) {
         for (let i=0; i < order.buyAmounts.length; i++) {
-            batchAmounts.push(BigNumber.from(order.buyAmounts[i]).add(takerExcess))
+            batchAmounts.push(BigNumber.from(order.buyAmounts[i]).add(takerExcess).add(protocolFees ? protocolFees[ind][i] : 0).add(partnerFees ? partnerFees[ind][i] : 0))
         }
         batchAddresses.push(...order.buyTokens)
     }
@@ -116,7 +117,9 @@ export function getBatchArrays(orders: JamOrderStruct[], takerExcess: BigNumberi
 
 }
 
-export function getAggregatedAmounts(orders: JamOrderStruct[]): {[id: string]: {[id: string]: BigNumberish}}  {
+export function getAggregatedAmounts(
+    orders: JamOrderStruct[]
+): {[id: string]: {[id: string]: BigNumberish}}  {
     let takersTokensAmounts: {[id: string]: {[id: string]: BigNumberish}} = {}
     for (let [ind, order] of orders.entries()) {
         if (takersTokensAmounts[order.receiver] === undefined) {
@@ -132,6 +135,21 @@ export function getAggregatedAmounts(orders: JamOrderStruct[]): {[id: string]: {
     }
     return takersTokensAmounts
 
+}
+
+export function addFeesAmounts(amounts: {[id: string]: {[id: string]: BigNumberish}}, orders: JamOrderStruct[], fees: BigNumber[][], receivers: string[]){
+    for (let [ind, order] of orders.entries()) {
+        if (amounts[receivers[ind]] === undefined) {
+            amounts[receivers[ind]] = {}
+        }
+        for (let i= 0; i < order.buyTokens.length; i++) {
+            if (amounts[receivers[ind]][order.buyTokens[i]] === undefined) {
+                amounts[receivers[ind]][order.buyTokens[i]] = BigNumber.from(0)
+            }
+            amounts[receivers[ind]][order.buyTokens[i]] =
+                BigNumber.from(amounts[receivers[ind]][order.buyTokens[i]]).add(BigNumber.from(fees[ind][i]));
+        }
+    }
 }
 
 export function encodeHooks(
