@@ -4,10 +4,10 @@ import {
   JamHooks,
   JamInteraction, JamOrderStruct
 } from "../../typechain-types/artifacts/src/JamSettlement";
-import {PERMIT2_ADDRESS} from "./config";
+import {PERMIT2_ADDRESS, TOKENS} from "./config";
 import {
   addFeesAmounts,
-  approveTokens, batchVerifyBalancesAfter, generatePartnerInfo,
+  approveTokens, batchVerifyBalancesAfter, createFakeJamOrder, encodeHooks, generatePartnerInfo,
   getAggregatedAmounts,
   getBalancesBefore,
   getBatchArrays, getBatchBalancesBefore,
@@ -22,7 +22,9 @@ import {HooksGenerator} from "./hooks/hooksGenerator";
 import {BebopSettlement} from "../../typechain-types";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {signJamOrder, signPermit2AndJam} from "./signing/signJamOrder";
-import {expect} from "chai";
+import {assert, expect} from "chai";
+import {ethers, network} from "hardhat";
+import {MaxUint256} from "@uniswap/permit2-sdk";
 
 describe("JamOrders", function () {
   let fixture: Awaited<ReturnType<typeof getFixture>>;
@@ -48,14 +50,18 @@ describe("JamOrders", function () {
       solverExcess: number = 1000,
       protocolFee: BigNumber[] | undefined = undefined,
       partnerFee: BigNumber[] | undefined = undefined,
-      partnerAddress: string = zeroAddress
+      partnerAddress: string = zeroAddress,
+      skipTakerApprovals: boolean = false
   ) {
     const { user, settlement, solver, solverContract, directMaker } = fixture;
 
     // Approving takers tokens
-    let nativeTokenAmount = await approveTokens(
-        jamOrder.sellTokens, jamOrder.sellAmounts, user, jamOrder.usingPermit2 ? PERMIT2_ADDRESS: fixture.balanceManager.address
-    )
+    let nativeTokenAmount = BigNumber.from(0)
+    if (!skipTakerApprovals){
+      nativeTokenAmount = await approveTokens(
+          jamOrder.sellTokens, jamOrder.sellAmounts, user, jamOrder.usingPermit2 ? PERMIT2_ADDRESS: fixture.balanceManager.address
+      )
+    }
 
     let changedBuyAmounts: BigNumber[];
     if (directSettle) {
@@ -98,6 +104,8 @@ describe("JamOrders", function () {
     let hooksHash = hooks === emptyHooks ? emptyHooksHash : utils.keccak256(
         utils.defaultAbiCoder.encode(fixture.settlement.interface.getFunction("hashHooks").inputs, [hooks])
     )
+    assert(hooksHash === await settlement.hashHooks(hooks))
+    let encodedHooks = hooks === emptyHooks ? "0x" : encodeHooks(hooks);
     let signature
     if (jamOrder.usingPermit2){
       signature = await signPermit2AndJam(user, jamOrder, hooksHash, fixture.balanceManager.address)
@@ -120,11 +128,11 @@ describe("JamOrders", function () {
       await approveTokens(jamOrder.buyTokens, directSettleIncreasedAmounts.length > 0 ?
               directSettleIncreasedAmounts : changedBuyAmounts, directMaker, fixture.balanceManager.address)
       res = await settlement.connect(executor).settleInternal(
-          jamOrder, signature, directSettleIncreasedAmounts, "0x", {value: nativeTokenAmount.toString()}
+          jamOrder, signature, directSettleIncreasedAmounts, encodedHooks, {value: nativeTokenAmount.toString()}
       );
     } else {
       res = await settlement.connect(executor).settle(
-          jamOrder, signature, interactions, "0x", balanceRecipient, {value: nativeTokenAmount.toString()},
+          jamOrder, signature, interactions, encodedHooks, balanceRecipient, {value: nativeTokenAmount.toString()},
       );
     }
     await verifyBalancesAfter(
@@ -146,7 +154,7 @@ describe("JamOrders", function () {
       )
     }
     await expect(res).to.emit(settlement, "BebopJamOrderFilled").withArgs(
-        jamOrder.nonce, jamOrder.receiver, jamOrder.sellTokens, jamOrder.buyTokens, jamOrder.sellAmounts, changedBuyAmounts
+        jamOrder.nonce, jamOrder.taker, jamOrder.sellTokens, jamOrder.buyTokens, jamOrder.sellAmounts, changedBuyAmounts
     )
   }
 
@@ -158,13 +166,15 @@ describe("JamOrders", function () {
       userExcess: number = 0,
       protocolFees: BigNumber[][] | undefined = undefined,
       partnerFees: BigNumber[][] | undefined = undefined,
-      partnerAddresses: string[] = []
+      partnerAddresses: string[] = [],
+      infApproval: boolean = false
   ) {
     const {  settlement, solver, solverContract } = fixture;
 
     // Approving takers tokens
     for (let i = 0; i < jamOrders.length; i++){
-      await approveTokens(jamOrders[i].sellTokens, jamOrders[i].sellAmounts, users[i], jamOrders[i].usingPermit2 ? PERMIT2_ADDRESS: fixture.balanceManager.address);
+      await approveTokens(jamOrders[i].sellTokens, infApproval ? jamOrders[i].sellAmounts.map(_ => MaxUint256) : jamOrders[i].sellAmounts,
+          users[i], jamOrders[i].usingPermit2 ? PERMIT2_ADDRESS: fixture.balanceManager.address);
     }
 
     let executor = solver;
@@ -240,6 +250,14 @@ describe("JamOrders", function () {
     await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls)
   });
 
+  it('JAM: settle - Many-to-Many', async function () {
+    let jamOrder: JamOrderStruct = getOrder("Many-to-Many", fixture.user.address, fixture.solver.address, true)!
+    let solverCalls0 = await getBebopSolverCalls(createFakeJamOrder(jamOrder, 0), bebop, fixture.solverContract.address, fixture.bebopMaker)
+    let solverCalls1 = await getBebopSolverCalls(createFakeJamOrder(jamOrder, 1), bebop, fixture.solverContract.address, fixture.bebopMaker)
+    let solverCalls = solverCalls0.concat(solverCalls1)
+    await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls)
+  });
+
   it('JAM: settle - One-to-Many with user excess', async function () {
     let jamOrder: JamOrderStruct = getOrder("One-to-Many", fixture.user.address, fixture.solver.address, true)!
     let excess = 1500
@@ -289,6 +307,12 @@ describe("JamOrders", function () {
 
   it('JAM: settle - BuyNative', async function () {
     let jamOrder: JamOrderStruct = getOrder("BuyNative", fixture.user.address, fixture.solver.address, true)!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
+    await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls)
+  });
+
+  it('JAM: settle - BuyNativeAndWrapped', async function () {
+    let jamOrder: JamOrderStruct = getOrder("BuyNativeAndWrapped", fixture.user.address, fixture.solver.address, true)!
     let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
     await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls)
   });
@@ -440,6 +464,22 @@ describe("JamOrders", function () {
     await batchSettle([fixture.user, fixture.anotherUser], jamOrders, allSolverCalls, fixture.solverContract.address)
   });
 
+  it('JAM: settleBatch - Simple with same user, same tokems', async function () {
+    let jamOrders: JamOrderStruct[] = [
+      getOrder("Simple", fixture.user.address, fixture.solver.address, true)!,
+      getOrder("Many-to-One", fixture.user.address, fixture.solver.address, true)!,
+      getOrder("One-to-Many", fixture.anotherUser.address, fixture.solver.address, false)!,
+    ]
+    let allSolverCalls: JamInteraction.DataStruct[] = [
+      ...await getBebopSolverCalls(jamOrders[0], bebop, fixture.solverContract.address, fixture.bebopMaker),
+      ...await getBebopSolverCalls(jamOrders[1], bebop, fixture.solverContract.address, fixture.bebopMaker),
+      ...await getBebopSolverCalls(jamOrders[2], bebop, fixture.solverContract.address, fixture.bebopMaker)
+    ]
+
+    await batchSettle([fixture.user, fixture.user, fixture.anotherUser], jamOrders, allSolverCalls, fixture.solverContract.address, 0,
+      undefined, undefined, [], true)
+  });
+
   it('JAM: settleBatch - Partner&Protocol fee', async function () {
     let protocolFeeBps = 200
     let partnerFeeBps = 300
@@ -494,468 +534,102 @@ describe("JamOrders", function () {
   });
 
 
+   //-----------------------------------------
+   //
+   //               Hooks tests
+   //
+   // -----------------------------------------
 
+  it('JAM: beforeSettle hooks - ERC20-Permit', async function () {
+    let jamOrder = getOrder("SimpleWETH", fixture.user.address, fixture.solver.address, false)!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
 
+    const takerPermit = await hooksGenerator.getHook_Permit(jamOrder.sellTokens[0], fixture.balanceManager.address);
+    const hooks: JamHooks.DefStruct = {
+      beforeSettle: [{ result: true, to: takerPermit.to!, data: takerPermit.data!, value: 0 }],
+      afterSettle: []
+    }
+    await settle(jamOrder, fixture.solverContract.address, hooks, solverCalls, true, false, [],
+    0, 1000, undefined, undefined, zeroAddress, true)
+  });
 
+  it('JAM: beforeSettle hooks - DAI-Permit', async function () {
+    let jamOrder = getOrder("UsingDaiPermit", fixture.user.address, fixture.solver.address, false)!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
+    const takerPermit = await hooksGenerator.getHook_Permit(jamOrder.sellTokens[0], fixture.balanceManager.address);
+    const hooks: JamHooks.DefStruct = {
+      beforeSettle: [{ result: true, to: takerPermit.to!, data: takerPermit.data!, value: 0 }],
+      afterSettle: []
+    }
+    await settle(jamOrder, fixture.solverContract.address, hooks, solverCalls, true, false, [],
+        0, 1000, undefined, undefined, zeroAddress, true)
+  });
 
+  it('JAM: afterSettle hooks', async function () {
+    let jamOrder = getOrder("BuyNative", fixture.user.address, fixture.solver.address, false)!
+    jamOrder.receiver = fixture.settlement.address
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
+    const hookForWrapping = await hooksGenerator.getHook_wrapNative(jamOrder.buyAmounts[0]);
+    const hookForTransfer = await hooksGenerator.getHook_transferERC20(TOKENS.WETH, jamOrder.buyAmounts[0], fixture.user.address);
+    const hooks: JamHooks.DefStruct = {
+      beforeSettle: [],
+      afterSettle: [
+        { result: true, to: hookForWrapping.to!, data: hookForWrapping.data!, value: hookForWrapping.value! }, // wrap native token
+        { result: true, to: hookForTransfer.to!, data: hookForTransfer.data!, value: hookForTransfer.value || "0" } // send to user
+      ]
+    }
+    await settle(jamOrder, fixture.solverContract.address, hooks, solverCalls)
+  });
 
+  //-----------------------------------------
+  //
+  //             Extra tests
+  //
+  // -----------------------------------------
 
+  it('JAM: Invalid executor', async function () {
+    let exclusiveDeadline = (await ethers.provider.getBlock("latest")).timestamp + 3;
+    let expiry = exclusiveDeadline + 1000;
+    let jamOrder: JamOrderStruct = getOrder(
+        "Simple", fixture.user.address, fixture.anotherUser.address, true, undefined, expiry, exclusiveDeadline
+    )!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
+    try {
+      await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls)
+    } catch (e) {
+      for (let i = 0; i < 5; i++) {
+        await network.provider.send('evm_mine');
+      }
+      // should pass because the exclusive deadline is over
+      await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls)
+      return
+    }
+    throw Error("Error was expected")
+  });
 
+  it('JAM: Limit order cancellation', async function () {
+    let jamOrder: JamOrderStruct = getOrder(
+        "Simple", fixture.user.address, fixture.solver.address, true, undefined, 9999999999
+    )!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
 
-
-  //
-  // it('settleInternal', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, fixture.directMaker.address, sellTokenTransfers, buyTokenTransfers)!
-  //   let solverCalls: JamInteraction.DataStruct[] = []
-  //   await settle(jamOrder, "0x", emptyHooks, solverCalls, sellTokenTransfers,
-  //       buyTokenTransfers, null, false, false, true)
-  // });
-  //
-  // it('settleInternal with increased buyAmounts', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, fixture.directMaker.address, sellTokenTransfers, buyTokenTransfers)!
-  //   let solverCalls: JamInteraction.DataStruct[] = []
-  //   let increasedBuyAmounts: BigNumberish[] = [(Number(jamOrder.buyAmounts[0]) + 1000).toString()]
-  //
-  //   await settle(jamOrder, "0x", emptyHooks, solverCalls, sellTokenTransfers,
-  //       buyTokenTransfers, null, false, false, true, increasedBuyAmounts)
-  // });
-  //
-  // it('Permit2', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.CALL_PERMIT2_THEN_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, fixture.solver.address, sellTokenTransfers, buyTokenTransfers)!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //   let permitsData: Signature.TakerPermitsInfoStruct = await signPermit2(
-  //       fixture.user, jamOrder.sellTokens, fixture.balanceManager.address, Math.floor(Date.now() / 1000) + 10000
-  //   )
-  //   await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers, permitsData)
-  // });
-  //
-  // it('Permit2 - repeated', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.PERMIT2_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, fixture.solver.address, sellTokenTransfers, buyTokenTransfers)!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //   await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers)
-  // });
-  //
-  // it('DAI-Permit', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.CALL_PERMIT_THEN_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let jamOrder: JamOrder.DataStruct = getOrder("UsingDaiPermit", fixture.user.address, fixture.solver.address, sellTokenTransfers, buyTokenTransfers)!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //   let permitsData: Signature.TakerPermitsInfoStruct = await signPermit(
-  //       fixture.user, TOKENS.DAI, fixture.balanceManager.address, Math.floor(Date.now() / 1000) + 10000
-  //   )
-  //   await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers, permitsData)
-  // });
-  //
-  // it('ERC20-Permit', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.CALL_PERMIT_THEN_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let jamOrder: JamOrder.DataStruct = getOrder("ERC20-Permit", fixture.user.address, fixture.solver.address, sellTokenTransfers, buyTokenTransfers)!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //   let permitsData: Signature.TakerPermitsInfoStruct = await signPermit(
-  //       fixture.user, TOKENS.AAVE, fixture.balanceManager.address, Math.floor(Date.now() / 1000) + 10000
-  //   )
-  //   await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers, permitsData)
-  // });
-  //
-  // it('Mix of Permit2 + Permit', async function () {
-  //   let sellTokenTransfers: Commands[] = [
-  //       //    UNI (permit)   WETH(traded before with Permit2)   LINK (permit2)    WBTC (permit2)
-  //       Commands.CALL_PERMIT_THEN_TRANSFER, Commands.PERMIT2_TRANSFER, Commands.CALL_PERMIT2_THEN_TRANSFER, Commands.CALL_PERMIT2_THEN_TRANSFER
-  //   ]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let jamOrder: JamOrder.DataStruct = getOrder("Permits-mix", fixture.user.address, fixture.solver.address, sellTokenTransfers, buyTokenTransfers)!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //   let permitsDeadline: number = Math.floor(Date.now() / 1000) + 10000
-  //   let fullPermitsData: Signature.TakerPermitsInfoStruct = await signPermit2(
-  //       fixture.user, [TOKENS.LINK, TOKENS.WBTC], fixture.balanceManager.address, permitsDeadline
-  //   )
-  //   let extraPermitData: Signature.TakerPermitsInfoStruct = await signPermit(
-  //       fixture.user, TOKENS.UNI, fixture.balanceManager.address, permitsDeadline
-  //   )
-  //   fullPermitsData.permitSignatures = extraPermitData.permitSignatures
-  //   await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers, fullPermitsData)
-  // });
-  //
-  //
-  //  //-----------------------------------------
-  //  //
-  //  //               Hooks tests
-  //  //
-  //  // -----------------------------------------
-  //
-  // it('beforeSettle hooks: Permit2', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.PERMIT2_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, fixture.solver.address, sellTokenTransfers, buyTokenTransfers)!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //
-  //   const takerPermit2 = await hooksGenerator.getHook_Permit2(jamOrder.sellTokens, fixture.balanceManager.address);
-  //   const hooks: JamHooks.DefStruct = {
-  //     beforeSettle: [{ result: true, to: takerPermit2.to!, data: takerPermit2.data!, value: 0 }],
-  //     afterSettle: []
-  //   }
-  //   let emptyPermitsData: Signature.TakerPermitsInfoStruct = {
-  //     permitSignatures: [],
-  //     signatureBytesPermit2: "0x",
-  //     noncesPermit2: [],
-  //     deadline: 0
-  //   }
-  //   await settle(jamOrder, fixture.solverContract.address, hooks, solverCalls, sellTokenTransfers, buyTokenTransfers, emptyPermitsData)
-  // });
-  //
-  // it('beforeSettle hooks: ERC20-Permit', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let jamOrder: JamOrder.DataStruct = getOrder("SimpleReverse", fixture.user.address, fixture.solver.address, sellTokenTransfers, buyTokenTransfers)!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //
-  //   const takerPermit = await hooksGenerator.getHook_Permit(jamOrder.sellTokens[0], fixture.balanceManager.address);
-  //   const hooks: JamHooks.DefStruct = {
-  //     beforeSettle: [{ result: true, to: takerPermit.to!, data: takerPermit.data!, value: 0 }],
-  //     afterSettle: []
-  //   }
-  //   await settle(jamOrder, fixture.solverContract.address, hooks, solverCalls, sellTokenTransfers, buyTokenTransfers,
-  //       null, true, true)
-  // });
-  //
-  // it('afterSettle hooks', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.NATIVE_TRANSFER, Commands.SIMPLE_TRANSFER]
-  //   let jamOrder: JamOrder.DataStruct = getOrder("BuyNativeAndWrapped", fixture.user.address, fixture.solver.address, sellTokenTransfers, buyTokenTransfers)!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //   jamOrder.receiver = fixture.settlement.address
-  //
-  //   let bridgeAddress = BINANCE_ADDRESS // using transfers instead of real bridge tx
-  //   let transferHook = await hooksGenerator.getHook_transferERC20(jamOrder.buyTokens[1], jamOrder.buyAmounts[1], bridgeAddress)
-  //   const hooks: JamHooks.DefStruct = {
-  //     beforeSettle: [],
-  //     afterSettle: [
-  //         { result: true, to: bridgeAddress, data: "0x", value: jamOrder.buyAmounts[0] },
-  //         { result: true, to: TOKENS.WETH, data: transferHook.data!, value: "0" }
-  //     ]
-  //   }
-  //   await settle(jamOrder, fixture.solverContract.address, hooks, solverCalls, sellTokenTransfers, buyTokenTransfers)
-  // });
-  //
-  // it('afterSettle hooks with settleInternal', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.NATIVE_TRANSFER]
-  //   let jamOrder: JamOrder.DataStruct = getOrder("BuyNative", fixture.user.address, fixture.directMaker.address, sellTokenTransfers, buyTokenTransfers)!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.settlement.address, fixture.bebopMaker)
-  //   jamOrder.receiver = fixture.settlement.address
-  //   const hooks: JamHooks.DefStruct = {
-  //     beforeSettle: [],
-  //     afterSettle: [{ result: true, to: BINANCE_ADDRESS, data: "0x", value: jamOrder.buyAmounts[0] }]
-  //   }
-  //   await settle(jamOrder, "0x", hooks, solverCalls, sellTokenTransfers,
-  //       buyTokenTransfers, null, false, false, true)
-  // });
-  //
-  // //-----------------------------------------
-  // //
-  // //             Extra tests
-  // //
-  // // -----------------------------------------
-  //
-  // it('Invalid executor', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, fixture.directMaker.address , sellTokenTransfers, buyTokenTransfers)!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //   try {
-  //       await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers)
-  //   } catch (e) {
-  //       return
-  //   }
-  //   throw Error("Error was expected")
-  // });
-  //
-  // it('Limit order cancellation', async function () {
-  //   // user places limit order by signing the order
-  //   let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let jamOrder: JamOrder.DataStruct = getOrder(
-  //       "Simple", fixture.user.address, fixture.solver.address, sellTokenTransfers, buyTokenTransfers, 10000,9999999999
-  //   )!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //
-  //   let isNonceValid = await fixture.settlement.isLimitOrderNonceValid(jamOrder.taker, jamOrder.nonce)
-  //   if (!isNonceValid){
-  //     throw Error("Nonce is not valid")
-  //   }
-  //   // user cancels this limit order
-  //   await fixture.settlement.connect(fixture.user).cancelLimitOrder(jamOrder.nonce)
-  //   try {
-  //     // should fail because this limit order was cancelled
-  //     await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers)
-  //   } catch (e){
-  //     isNonceValid = await fixture.settlement.isLimitOrderNonceValid(jamOrder.taker, jamOrder.nonce)
-  //     if (isNonceValid){
-  //       throw Error("Nonce is still valid after canceling the order")
-  //     }
-  //     return
-  //   }
-  //   throw Error("Error was expected")
-  // });
-  //
-  // //-----------------------------------------
-  // //
-  // //             PartialFill tests
-  // //
-  // // -----------------------------------------
-  //
-  // it('PartialFill simple', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let minFillPercent = 9000
-  //   let curFillPercent = 9500
-  //   let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, fixture.solver.address, sellTokenTransfers, buyTokenTransfers, minFillPercent)!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker, curFillPercent)
-  //   await settle(
-  //       jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers,null,
-  //       true, false, false, [], curFillPercent
-  //   )
-  // });
-  //
-  // it('PartialFill with Permits', async function () {
-  //   let sellTokenTransfers: Commands[] = [
-  //     //    DYDX (permit)   WETH(traded before with Permit2)   SNX (permit2)
-  //     Commands.CALL_PERMIT_THEN_TRANSFER, Commands.PERMIT2_TRANSFER, Commands.CALL_PERMIT2_THEN_TRANSFER
-  //   ]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let minFillPercent = 9000
-  //   let curFillPercent = 9000
-  //   let jamOrder: JamOrder.DataStruct = getOrder("Permits-fresh-mix", fixture.user.address, fixture.solver.address, sellTokenTransfers, buyTokenTransfers, minFillPercent)!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker, curFillPercent)
-  //   let permitsDeadline: number = Math.floor(Date.now() / 1000) + 10000
-  //   let fullPermitsData: Signature.TakerPermitsInfoStruct = await signPermit2(
-  //       fixture.user, [TOKENS.SNX], fixture.balanceManager.address, permitsDeadline
-  //   )
-  //   let extraPermitData: Signature.TakerPermitsInfoStruct = await signPermit(
-  //       fixture.user, TOKENS.DYDX, fixture.balanceManager.address, permitsDeadline
-  //   )
-  //   fullPermitsData.permitSignatures = extraPermitData.permitSignatures
-  //   await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers, fullPermitsData,
-  //       true, false, false, [], curFillPercent)
-  // });
-  //
-  // it('PartialFill with settleInternal', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let minFillPercent = 9000
-  //   let curFillPercent = 9200
-  //   let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, fixture.directMaker.address, sellTokenTransfers, buyTokenTransfers, minFillPercent)!
-  //   let solverCalls: JamInteraction.DataStruct[] = []
-  //   await settle(jamOrder, "0x", emptyHooks, solverCalls, sellTokenTransfers,
-  //       buyTokenTransfers, null, false, false, true, [], curFillPercent)
-  // });
-  //
-  // it('PartialFill with settleInternal+increased amounts', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let minFillPercent = 9000
-  //   let curFillPercent = 9000
-  //   let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, fixture.directMaker.address, sellTokenTransfers, buyTokenTransfers, minFillPercent)!
-  //   let solverCalls: JamInteraction.DataStruct[] = []
-  //   let increasedBuyAmounts: BigNumberish[] = [(Number(jamOrder.buyAmounts[0]) + 99999).toString()]
-  //   await settle(jamOrder, "0x", emptyHooks, solverCalls, sellTokenTransfers,
-  //       buyTokenTransfers, null, false, false, true, increasedBuyAmounts, curFillPercent)
-  // });
-  //
-  //
-  // it('PartialFill fail - invalid percent', async function () {
-  //   let sellTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let buyTokenTransfers: Commands[] = [Commands.SIMPLE_TRANSFER]
-  //   let minFillPercent = 9000
-  //   let curFillPercent = 8999
-  //   let jamOrder: JamOrder.DataStruct = getOrder("Simple", fixture.user.address, fixture.solver.address, sellTokenTransfers, buyTokenTransfers, minFillPercent)!
-  //   let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //   try {
-  //     await settle(
-  //         jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, sellTokenTransfers, buyTokenTransfers,null,
-  //         true, false, false, [], curFillPercent
-  //     )
-  //   } catch (e){
-  //       return
-  //   }
-  //   throw Error("Error was expected")
-  // });
-  //
-  // //-----------------------------------------
-  // //
-  // //               Batch tests
-  // //
-  // // -----------------------------------------
-  //
-  // it('settleBatch simple', async function () {
-  //   let batchSellTokenTransfers: Commands[][] = [[Commands.SIMPLE_TRANSFER], [Commands.SIMPLE_TRANSFER]]
-  //   let batchBuyTokenTransfers: Commands[][] = [[Commands.SIMPLE_TRANSFER], [Commands.SIMPLE_TRANSFER]]
-  //   let jamOrders: JamOrder.DataStruct[] = [
-  //       getOrder("Simple", fixture.user.address, fixture.solver.address, batchSellTokenTransfers[0], batchBuyTokenTransfers[0])!,
-  //       getOrder("Simple", fixture.anotherUser.address, fixture.solver.address, batchSellTokenTransfers[1], batchBuyTokenTransfers[1])!,
-  //   ]
-  //   let allSolverCalls: JamInteraction.DataStruct[] = [
-  //     ...await getBebopSolverCalls(jamOrders[0], bebop, fixture.solverContract.address, fixture.bebopMaker),
-  //     ...await getBebopSolverCalls(jamOrders[1], bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //   ]
-  //
-  //   let solverData: ExecInfo.BatchSolverDataStruct = {
-  //     balanceRecipient: fixture.solverContract.address,
-  //     curFillPercents: [],
-  //     takersPermitsUsage: [],
-  //     transferExactAmounts: true
-  //   }
-  //   await batchSettle([fixture.user, fixture.anotherUser], jamOrders,allSolverCalls,
-  //       batchSellTokenTransfers, batchBuyTokenTransfers, [], solverData)
-  // });
-  //
-  // it('settleBatch same user', async function () {
-  //   let batchSellTokenTransfers: Commands[][] = [[Commands.SIMPLE_TRANSFER], [Commands.PERMIT2_TRANSFER], [Commands.SIMPLE_TRANSFER]]
-  //   let batchBuyTokenTransfers: Commands[][] = [[Commands.SIMPLE_TRANSFER], [Commands.SIMPLE_TRANSFER], [Commands.SIMPLE_TRANSFER]]
-  //   let jamOrders: JamOrder.DataStruct[] = [
-  //     getOrder("Simple", fixture.user.address, fixture.solver.address, batchSellTokenTransfers[0], batchBuyTokenTransfers[0])!,
-  //     getOrder("Simple", fixture.user.address, fixture.solver.address, batchSellTokenTransfers[1], batchBuyTokenTransfers[1])!,
-  //     getOrder("SimpleReverse", fixture.anotherUser.address, fixture.solver.address, batchSellTokenTransfers[2], batchBuyTokenTransfers[2])!,
-  //   ]
-  //   let allSolverCalls: JamInteraction.DataStruct[] = [
-  //     ...await getBebopSolverCalls(jamOrders[0], bebop, fixture.solverContract.address, fixture.bebopMaker),
-  //     ...await getBebopSolverCalls(jamOrders[1], bebop, fixture.solverContract.address, fixture.bebopMaker),
-  //     ...await getBebopSolverCalls(jamOrders[2], bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //   ]
-  //
-  //   let solverData: ExecInfo.BatchSolverDataStruct = {
-  //     balanceRecipient: fixture.solverContract.address,
-  //     curFillPercents: [],
-  //     takersPermitsUsage: [],
-  //     transferExactAmounts: true
-  //   }
-  //   await batchSettle([fixture.user, fixture.user, fixture.anotherUser], jamOrders, allSolverCalls,
-  //       batchSellTokenTransfers, batchBuyTokenTransfers, [], solverData)
-  // });
-  //
-  // it('settleBatch with permits', async function () {
-  //   let batchSellTokenTransfers: Commands[][] = [[Commands.SIMPLE_TRANSFER], [Commands.CALL_PERMIT2_THEN_TRANSFER], [Commands.CALL_PERMIT_THEN_TRANSFER]]
-  //   let batchBuyTokenTransfers: Commands[][] = [[Commands.SIMPLE_TRANSFER], [Commands.SIMPLE_TRANSFER, Commands.SIMPLE_TRANSFER, Commands.SIMPLE_TRANSFER], [Commands.SIMPLE_TRANSFER]]
-  //   let jamOrders: JamOrder.DataStruct[] = [
-  //     getOrder("Simple", fixture.user.address, fixture.solver.address, batchSellTokenTransfers[0], batchBuyTokenTransfers[0])!,
-  //     getOrder("One-to-Many-another", fixture.user.address, fixture.solver.address, batchSellTokenTransfers[1], batchBuyTokenTransfers[1])!,
-  //     getOrder("UsingDaiPermit", fixture.anotherUser.address, fixture.solver.address, batchSellTokenTransfers[2], batchBuyTokenTransfers[2])!,
-  //   ]
-  //   let allSolverCalls: JamInteraction.DataStruct[] = [
-  //     ...await getBebopSolverCalls(jamOrders[0], bebop, fixture.solverContract.address, fixture.bebopMaker),
-  //     ...await getBebopSolverCalls(jamOrders[1], bebop, fixture.solverContract.address, fixture.bebopMaker),
-  //     ...await getBebopSolverCalls(jamOrders[2], bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //   ]
-  //
-  //   let permitsData: Signature.TakerPermitsInfoStruct = await signPermit2(
-  //       fixture.user, jamOrders[1].sellTokens, fixture.balanceManager.address, Math.floor(Date.now() / 1000) + 10000
-  //   )
-  //   let permitsDataAnotherUser: Signature.TakerPermitsInfoStruct = await signPermit(
-  //       fixture.anotherUser, TOKENS.DAI, fixture.balanceManager.address, Math.floor(Date.now() / 1000) + 10000
-  //   )
-  //
-  //   let solverData: ExecInfo.BatchSolverDataStruct = {
-  //     balanceRecipient: fixture.solverContract.address,
-  //     curFillPercents: [],
-  //     takersPermitsUsage: [false, true, true],
-  //     transferExactAmounts: true
-  //   }
-  //   await batchSettle([fixture.user, fixture.user, fixture.anotherUser], jamOrders, allSolverCalls,
-  //       batchSellTokenTransfers, batchBuyTokenTransfers, [permitsData, permitsDataAnotherUser], solverData)
-  // });
-  //
-  // it('settleBatch with excess', async function () {
-  //   let batchSellTokenTransfers: Commands[][] = [
-  //       [Commands.PERMIT2_TRANSFER, Commands.CALL_PERMIT2_THEN_TRANSFER, Commands.CALL_PERMIT2_THEN_TRANSFER],
-  //       [Commands.CALL_PERMIT2_THEN_TRANSFER]
-  //   ]
-  //   let batchBuyTokenTransfers: Commands[][] = [[Commands.SIMPLE_TRANSFER], [Commands.SIMPLE_TRANSFER, Commands.SIMPLE_TRANSFER, Commands.SIMPLE_TRANSFER]]
-  //   let jamOrders: JamOrder.DataStruct[] = [
-  //     getOrder("Many-to-One", fixture.user.address, fixture.solver.address, batchSellTokenTransfers[0], batchBuyTokenTransfers[0])!,
-  //     getOrder("One-to-Many", fixture.anotherUser.address, fixture.solver.address, batchSellTokenTransfers[1], batchBuyTokenTransfers[1])!,
-  //   ]
-  //   let allSolverCalls: JamInteraction.DataStruct[] = [
-  //     ...await getBebopSolverCalls(jamOrders[0], bebop, fixture.solverContract.address, fixture.bebopMaker),
-  //     ...await getBebopSolverCalls(jamOrders[1], bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //   ]
-  //
-  //   let permitsData: Signature.TakerPermitsInfoStruct = await signPermit2(
-  //       fixture.user, [TOKENS.LINK, TOKENS.WBTC], fixture.balanceManager.address, Math.floor(Date.now() / 1000) + 10000
-  //   )
-  //   let permitsDataAnotherUser: Signature.TakerPermitsInfoStruct = await signPermit2(
-  //       fixture.anotherUser, jamOrders[1].sellTokens, fixture.balanceManager.address, Math.floor(Date.now() / 1000) + 10000
-  //   )
-  //
-  //   let solverData: ExecInfo.BatchSolverDataStruct = {
-  //     balanceRecipient: fixture.solverContract.address,
-  //     curFillPercents: [],
-  //     takersPermitsUsage: [true, true],
-  //     transferExactAmounts: false
-  //   }
-  //   await batchSettle([fixture.user, fixture.anotherUser], jamOrders,allSolverCalls, batchSellTokenTransfers,
-  //       batchBuyTokenTransfers, [permitsData, permitsDataAnotherUser], solverData)
-  // });
-  //
-  // it('settleBatch with same tokens excess', async function () {
-  //   let batchSellTokenTransfers: Commands[][] = [[Commands.PERMIT2_TRANSFER], [Commands.PERMIT2_TRANSFER]]
-  //   let batchBuyTokenTransfers: Commands[][] = [
-  //       [Commands.SIMPLE_TRANSFER, Commands.SIMPLE_TRANSFER, Commands.SIMPLE_TRANSFER],
-  //     [Commands.SIMPLE_TRANSFER, Commands.SIMPLE_TRANSFER, Commands.SIMPLE_TRANSFER]
-  //   ]
-  //   let jamOrders: JamOrder.DataStruct[] = [
-  //     getOrder("One-to-Many-another", fixture.user.address, fixture.solver.address, batchSellTokenTransfers[0], batchBuyTokenTransfers[0])!,
-  //     getOrder("One-to-Many", fixture.anotherUser.address, fixture.solver.address, batchSellTokenTransfers[1], batchBuyTokenTransfers[1])!,
-  //   ]
-  //   let allSolverCalls: JamInteraction.DataStruct[] = [
-  //     ...await getBebopSolverCalls(jamOrders[0], bebop, fixture.solverContract.address, fixture.bebopMaker),
-  //     ...await getBebopSolverCalls(jamOrders[1], bebop, fixture.solverContract.address, fixture.bebopMaker)
-  //   ]
-  //
-  //   let solverData: ExecInfo.BatchSolverDataStruct = {
-  //     balanceRecipient: fixture.solverContract.address,
-  //     curFillPercents: [],
-  //     takersPermitsUsage: [],
-  //     transferExactAmounts: false
-  //   }
-  //   await batchSettle([fixture.user, fixture.anotherUser], jamOrders,allSolverCalls,
-  //       batchSellTokenTransfers, batchBuyTokenTransfers,[], solverData)
-  // });
-  //
-  // it('settleBatch with partial fills', async function () {
-  //   let batchSellTokenTransfers: Commands[][] = [[Commands.PERMIT2_TRANSFER], [Commands.PERMIT2_TRANSFER]]
-  //   let batchBuyTokenTransfers: Commands[][] = [
-  //     [Commands.SIMPLE_TRANSFER, Commands.SIMPLE_TRANSFER, Commands.SIMPLE_TRANSFER],
-  //     [Commands.SIMPLE_TRANSFER, Commands.SIMPLE_TRANSFER, Commands.SIMPLE_TRANSFER]
-  //   ]
-  //   let minFillPercent = 9000
-  //   let jamOrders: JamOrder.DataStruct[] = [
-  //     getOrder("One-to-Many-another", fixture.user.address, fixture.solver.address, batchSellTokenTransfers[0], batchBuyTokenTransfers[0], minFillPercent)!,
-  //     getOrder("One-to-Many", fixture.anotherUser.address, fixture.solver.address, batchSellTokenTransfers[1], batchBuyTokenTransfers[1], minFillPercent)!,
-  //   ]
-  //   let allSolverCalls: JamInteraction.DataStruct[] = [
-  //     ...await getBebopSolverCalls(jamOrders[0], bebop, fixture.solverContract.address, fixture.bebopMaker, minFillPercent),
-  //     ...await getBebopSolverCalls(jamOrders[1], bebop, fixture.solverContract.address, fixture.bebopMaker, minFillPercent)
-  //   ]
-  //
-  //   let solverData: ExecInfo.BatchSolverDataStruct = {
-  //     balanceRecipient: fixture.solverContract.address,
-  //     curFillPercents: [minFillPercent, minFillPercent],
-  //     takersPermitsUsage: [],
-  //     transferExactAmounts: false
-  //   }
-  //   await batchSettle([fixture.user, fixture.anotherUser], jamOrders,allSolverCalls,
-  //       batchSellTokenTransfers, batchBuyTokenTransfers,[], solverData, true)
-  // });
-
-
-
+    let isNonceValid = await fixture.settlement.isLimitOrderNonceValid(jamOrder.taker, jamOrder.nonce)
+    if (!isNonceValid){
+      throw Error("Nonce is not valid")
+    }
+    // user cancels this limit order
+    await fixture.settlement.connect(fixture.user).cancelLimitOrder(jamOrder.nonce)
+    try {
+      // should fail because this limit order was cancelled
+      await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls)
+    } catch (e){
+      isNonceValid = await fixture.settlement.isLimitOrderNonceValid(jamOrder.taker, jamOrder.nonce)
+      if (isNonceValid){
+        throw Error("Nonce is still valid after canceling the order")
+      }
+      return
+    }
+    throw Error("Error was expected")
+  });
 
 });

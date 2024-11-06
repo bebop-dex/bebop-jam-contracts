@@ -73,5 +73,5 @@ export async function signJamOrder(user: SignerWithAddress, order: JamOrderStruc
         "chainId": await user.getChainId(),
         "verifyingContract": settlement.address
     }
-    return await user._signTypedData(JAM_DOMAIN, JAM_ORDER_TYPES, toDictForSigning(order, hooksHash),);
+    return await user._signTypedData(JAM_DOMAIN, JAM_ORDER_TYPES, toDictForSigning(order, hooksHash));
 }

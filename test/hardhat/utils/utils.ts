@@ -186,3 +186,12 @@ export function assertBlendAggregateEvent(
 export function generatePartnerInfo(partnerAddress: string, partnerFeeBps: number, protocolFeeBps: number) {
     return BigNumber.from(partnerAddress).shl(32).or(BigNumber.from(partnerFeeBps).shl(16)).or(BigNumber.from(protocolFeeBps))
 }
+
+export function createFakeJamOrder(jamOrder: JamOrderStruct, ind: number): JamOrderStruct {
+    let fakeOrder = {...jamOrder}
+    fakeOrder.buyTokens = [fakeOrder.buyTokens[ind]]
+    fakeOrder.buyAmounts = [fakeOrder.buyAmounts[ind]]
+    fakeOrder.sellTokens = [fakeOrder.sellTokens[ind]]
+    fakeOrder.sellAmounts = [fakeOrder.sellAmounts[ind]]
+    return fakeOrder
+}

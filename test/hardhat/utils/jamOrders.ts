@@ -117,22 +117,13 @@ export function getOrder(
             sellAmounts: [AMOUNTS[TOKENS.USDC]]
         }
     }
-    if (orderType === "One-to-Many-another"){
-        return {
-            ...common,
-            buyTokens: [TOKENS.SNX, TOKENS.LINK, TOKENS.WBTC],
-            sellTokens: [TOKENS.DYDX],
-            buyAmounts: [AMOUNTS.SNX_1, AMOUNTS[TOKENS.LINK], AMOUNTS[TOKENS.WBTC]],
-            sellAmounts: [AMOUNTS[TOKENS.DYDX]]
-        }
-    }
     if (orderType === "Many-to-Many"){
         return {
             ...common,
-            buyTokens: [TOKENS.WETH, TOKENS.LINK, TOKENS.WBTC],
-            sellTokens: [TOKENS.USDC, TOKENS.YFI, TOKENS.MKR],
-            buyAmounts: [AMOUNTS[TOKENS.WETH], AMOUNTS[TOKENS.LINK], AMOUNTS[TOKENS.WBTC]],
-            sellAmounts: [AMOUNTS[TOKENS.USDC], AMOUNTS[TOKENS.YFI], AMOUNTS[TOKENS.MKR]]
+            buyTokens: [TOKENS.WETH, TOKENS.USDT],
+            sellTokens: [TOKENS.USDC, TOKENS.MKR],
+            buyAmounts: [AMOUNTS[TOKENS.WETH], AMOUNTS[TOKENS.USDT]],
+            sellAmounts: [AMOUNTS[TOKENS.USDC], AMOUNTS[TOKENS.MKR]]
         }
     }
     throw new Error("Order type not supported")
