@@ -9,19 +9,23 @@ import {
   TOKENS
 } from "../config";
 import BebopSettlementABI from "../blend/BebopSettlement.json";
+import SmartWalletABI from "./EIP1271Wallet.json";
 import {BebopSettlement} from "../../../typechain-types";
+import {EIP1271Wallet} from "../../../typechain-types";
 
 
-async function getFunds(walletsWithFunds: SignerWithAddress[], solverAddr: string){
+async function getFunds(walletsWithFunds: (SignerWithAddress | EIP1271Wallet)[]){
   let amount = ethers.utils.parseEther("90") // ETH
   for (let wallet of walletsWithFunds) {
     // Get 90 WETH
-    await wallet.sendTransaction({
-      to: TOKENS.WETH,
-      value: amount
-    })
-    let WETH_Contract = await ethers.getContractAt("IERC20", TOKENS.WETH)
-    expect(await WETH_Contract.balanceOf(wallet.address)).to.equal(amount);
+    if (wallet instanceof SignerWithAddress) {
+      await wallet.sendTransaction({
+        to: TOKENS.WETH,
+        value: amount
+      })
+      let WETH_Contract = await ethers.getContractAt("IERC20", TOKENS.WETH)
+      expect(await WETH_Contract.balanceOf(wallet.address)).to.equal(amount);
+    }
 
     // Get other tokens
     for (let token of Object.values(TOKENS)) {
@@ -61,6 +65,8 @@ export async function getFixture () {
     TOKENS.DAI
   ]) as BebopSettlement;
 
+  const takerSmartWallet = await waffle.deployContract(deployer, SmartWalletABI, []) as EIP1271Wallet;
+
   const JamSettlement = await ethers.getContractFactory("JamSettlement");
   const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS, bebopBlend.address, treasuryAddress.address);
   await settlement.deployed();
@@ -73,15 +79,15 @@ export async function getFixture () {
   const JamBalanceManager = await ethers.getContractFactory("JamBalanceManager");
   const balanceManager = await JamBalanceManager.attach(balanceManagerAddress);
 
-  let walletsWithFunds = [user, anotherUser, bebopMaker, bebopMaker2, bebopMaker3, directMaker, solver]
-  await getFunds(walletsWithFunds, solverContract.address)
-  console.log("User", user.address)
-  console.log("BebopMaker", bebopMaker.address)
-  console.log("DirectMaker", directMaker.address)
-  console.log("SolverContract", solverContract.address)
-  console.log("BalanceManager", balanceManager.address)
-  console.log("BebopBlend", bebopBlend.address)
-  console.log("Settlement", settlement.address)
+  let walletsWithFunds = [user, anotherUser, bebopMaker, bebopMaker2, bebopMaker3, directMaker, solver, takerSmartWallet]
+  await getFunds(walletsWithFunds)
+  // console.log("User", user.address)
+  // console.log("BebopMaker", bebopMaker.address)
+  // console.log("DirectMaker", directMaker.address)
+  // console.log("SolverContract", solverContract.address)
+  // console.log("BalanceManager", balanceManager.address)
+  // console.log("BebopBlend", bebopBlend.address)
+  // console.log("Settlement", settlement.address)
 
   return {
     deployer,
@@ -98,5 +104,6 @@ export async function getFixture () {
     directMaker,
     bebopBlend,
     treasuryAddress,
+    takerSmartWallet
   }
 }

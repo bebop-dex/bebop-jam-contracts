@@ -39,7 +39,8 @@ const config: HardhatUserConfig = {
   },
   typechain: {
     externalArtifacts: [
-        "./test/hardhat/blend/BebopSettlement.json"
+        "./test/hardhat/blend/BebopSettlement.json",
+        "./test/hardhat/utils/EIP1271Wallet.json"
     ]
   },
   solidity: {

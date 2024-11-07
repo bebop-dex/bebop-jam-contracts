@@ -54,6 +54,15 @@ export function getOrder(
             buyAmounts: [AMOUNTS2[TOKENS.USDC]]
         }
     }
+    if (orderType === "SimpleMKR"){
+        return {
+            ...common,
+            sellTokens: [TOKENS.MKR],
+            buyTokens: [TOKENS.USDC],
+            sellAmounts: [AMOUNTS[TOKENS.MKR]],
+            buyAmounts: [AMOUNTS[TOKENS.USDC]]
+        }
+    }
     if (orderType === "UsingDaiPermit"){
         return {
             ...common,

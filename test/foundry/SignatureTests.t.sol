@@ -2,7 +2,7 @@
 pragma solidity ^0.8.27;
 
 import "forge-std/Test.sol";
-import "./utils/MakerWallet.sol";
+import "./utils/SmartWallet.sol";
 import "../../src/JamSettlement.sol";
 import "./utils/Utils.sol";
 

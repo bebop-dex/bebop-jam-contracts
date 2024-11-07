@@ -51,15 +51,17 @@ describe("JamOrders", function () {
       protocolFee: BigNumber[] | undefined = undefined,
       partnerFee: BigNumber[] | undefined = undefined,
       partnerAddress: string = zeroAddress,
-      skipTakerApprovals: boolean = false
+      skipTakerApprovals: boolean = false,
+      _signer: SignerWithAddress | undefined = undefined
   ) {
     const { user, settlement, solver, solverContract, directMaker } = fixture;
+    let signer = _signer === undefined ? user : _signer
 
     // Approving takers tokens
     let nativeTokenAmount = BigNumber.from(0)
     if (!skipTakerApprovals){
       nativeTokenAmount = await approveTokens(
-          jamOrder.sellTokens, jamOrder.sellAmounts, user, jamOrder.usingPermit2 ? PERMIT2_ADDRESS: fixture.balanceManager.address
+          jamOrder.sellTokens, jamOrder.sellAmounts, signer, jamOrder.usingPermit2 ? PERMIT2_ADDRESS: fixture.balanceManager.address
       )
     }
 
@@ -94,7 +96,7 @@ describe("JamOrders", function () {
         { result: true, to: executeOnSolverContract.to!, data: executeOnSolverContract.data!, value: value }
       ]
     } else if (!directSettle){
-      executor = user
+      executor = signer
       interactions = solverCalls
     } else {
       executor = directMaker
@@ -108,12 +110,12 @@ describe("JamOrders", function () {
     let encodedHooks = hooks === emptyHooks ? "0x" : encodeHooks(hooks);
     let signature
     if (jamOrder.usingPermit2){
-      signature = await signPermit2AndJam(user, jamOrder, hooksHash, fixture.balanceManager.address)
+      signature = await signPermit2AndJam(signer, jamOrder, hooksHash, fixture.balanceManager.address)
     } else {
-      if (executor.address === user.address){
+      if (executor.address === jamOrder.taker){
         signature = "0x"
       } else {
-        signature = await signJamOrder(user, jamOrder, hooksHash, settlement);
+        signature = await signJamOrder(signer, jamOrder, hooksHash, settlement);
       }
     }
 
@@ -630,6 +632,33 @@ describe("JamOrders", function () {
       return
     }
     throw Error("Error was expected")
+  });
+
+  it('JAM: taker with smart wallet, standard approvals', async function () {
+    let jamOrder = getOrder("SimpleWETH", fixture.takerSmartWallet.address, fixture.solver.address, false)!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
+    await fixture.takerSmartWallet.connect(fixture.deployer).approve(jamOrder.sellTokens[0], fixture.balanceManager.address)
+
+    try {
+      // should fail, because signer is not added
+      await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, true, false, [],
+          0, 1000, undefined, undefined, zeroAddress, true, fixture.anotherUser)
+    } catch (e){
+      await fixture.takerSmartWallet.connect(fixture.deployer).addSigner(fixture.anotherUser.address)
+      await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, true, false, [],
+          0, 1000, undefined, undefined, zeroAddress, true, fixture.anotherUser)
+      return
+    }
+    throw Error("Error was expected")
+  });
+
+  it('JAM: taker with smart wallet, permit2', async function () {
+    let jamOrder = getOrder("SimpleMKR", fixture.takerSmartWallet.address, fixture.solver.address, true)!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
+    await fixture.takerSmartWallet.connect(fixture.deployer).approve(jamOrder.sellTokens[0], PERMIT2_ADDRESS)
+    await fixture.takerSmartWallet.connect(fixture.deployer).addSigner(fixture.anotherUser.address)
+    await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls, true, false, [],
+        0, 1000, undefined, undefined, zeroAddress, true, fixture.anotherUser)
   });
 
 });
