@@ -18,6 +18,7 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
     IJamBalanceManager public immutable balanceManager;
     address public immutable bebopBlend;
     using BlendAggregateOrderLib for BlendAggregateOrder;
+    using BlendMultiOrderLib for BlendMultiOrder;
 
     constructor(address _permit2, address _bebopBlend, address _treasuryAddress) JamPartner(_treasuryAddress) {
         balanceManager = new JamBalanceManager(address(this), _permit2);
@@ -160,13 +161,16 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
                 BlendSingleOrder memory order,
                 IBebopBlend.MakerSignature memory makerSignature,
                 IBebopBlend.OldSingleQuote memory takerQuoteInfo,
+                address makerAddress,
                 bytes memory takerSignature
-            ) = abi.decode(data, (BlendSingleOrder, IBebopBlend.MakerSignature, IBebopBlend.OldSingleQuote, bytes));
+            ) = abi.decode(data, (BlendSingleOrder, IBebopBlend.MakerSignature, IBebopBlend.OldSingleQuote, address, bytes));
             balanceManager.transferTokenForBlendSingleOrder(order, takerQuoteInfo, takerSignature, takerAddress, hooksHash);
+            order.maker_address = makerAddress;
             approveToken(IERC20(order.taker_token), order.taker_amount, bebopBlend);
             IBebopBlend(bebopBlend).settleSingle(order, makerSignature, 0, takerQuoteInfo, "0x");
             emit BebopBlendSingleOrderFilled(
-                uint128(order.flags >> 128), order.receiver, order.taker_token, order.maker_token, order.taker_amount,
+                uint128(order.flags >> 128), order.receiver, order.taker_token,
+                (order.packed_commands & 0x02) != 0 ? JamOrderLib.NATIVE_TOKEN : order.maker_token, order.taker_amount,
                 takerQuoteInfo.useOldAmount ? takerQuoteInfo.makerAmount : order.maker_amount
             );
         } else if (orderType == IBebopBlend.BlendOrderType.Multi){
@@ -174,15 +178,17 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
                 BlendMultiOrder memory order,
                 IBebopBlend.MakerSignature memory makerSignature,
                 IBebopBlend.OldMultiQuote memory takerQuoteInfo,
+                address makerAddress,
                 bytes memory takerSignature
-            ) = abi.decode(data, (BlendMultiOrder, IBebopBlend.MakerSignature, IBebopBlend.OldMultiQuote, bytes));
+            ) = abi.decode(data, (BlendMultiOrder, IBebopBlend.MakerSignature, IBebopBlend.OldMultiQuote, address, bytes));
             balanceManager.transferTokensForMultiBebopOrder(order, takerQuoteInfo, takerSignature, takerAddress, hooksHash);
+            order.maker_address = makerAddress;
             for (uint i; i < order.taker_tokens.length; ++i) {
                 approveToken(IERC20(order.taker_tokens[i]), order.taker_amounts[i], bebopBlend);
             }
             IBebopBlend(bebopBlend).settleMulti(order, makerSignature, 0, takerQuoteInfo, "0x");
             emit BebopBlendMultiOrderFilled(
-                uint128(order.flags >> 128), order.receiver, order.taker_tokens, order.maker_tokens, order.taker_amounts,
+                uint128(order.flags >> 128), order.receiver, order.taker_tokens, order.getMakerTokens(), order.taker_amounts,
                 takerQuoteInfo.useOldAmount ? takerQuoteInfo.makerAmounts : order.maker_amounts
             );
         } else if (orderType == IBebopBlend.BlendOrderType.Aggregate){

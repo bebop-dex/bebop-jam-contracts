@@ -75,7 +75,8 @@ export async function makerSignBlendOrder(
     signer: SignerWithAddress,
     _order: BlendSingleOrderStruct | BlendMultiOrderStruct,
     bebopAddress: string,
-    partner_id: number = 0
+    partner_id: number = 0,
+    makerAddress: string | null = null
 ): Promise<string>{
     const BEBOP_DOMAIN = {
         "name": "BebopSettlement",
@@ -84,6 +85,9 @@ export async function makerSignBlendOrder(
         "verifyingContract": bebopAddress
     }
     let orderForSigning = {partner_id: partner_id, ..._order}
+    if (makerAddress !== null){
+        orderForSigning.maker_address = makerAddress
+    }
     // @ts-ignore
     delete orderForSigning.flags
     if ((_order as BlendSingleOrderStruct).packed_commands !== undefined){

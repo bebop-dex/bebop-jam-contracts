@@ -29,6 +29,7 @@ library BlendAggregateOrderLib {
     string internal constant PERMIT2_ORDER_TYPE = string(
         abi.encodePacked("AggregateOrder witness)", ORDER_TYPE, "TokenPermissions(address token,uint256 amount)")
     );
+    address internal constant NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /// @notice hash the given order using same schema as in BebopBlend contract
     /// @param order the order to hash
@@ -91,8 +92,8 @@ library BlendAggregateOrderLib {
             uint curTokensLen = unpackTakerAmounts ? order.taker_tokens[i].length : order.maker_tokens[i].length;
             for (uint256 j; j < curTokensLen; ++j) {
                 /// @dev  AggregateOrder contains multiple maker orders, 'commands' field indicates how to transfer tokens
-                /// All commands packed into one variable with bytes type, for each token command is 1 byte:
-                /// '0x[maker1_order_maker_tokens][maker1_order_taker_tokens][maker2_order_maker_tokens][maker2_order_taker_tokens]...'
+                /// All commands packed into one variable with bytes type, for each token - command is 1 byte:
+                /// '0x[maker1-order_maker-token1][maker1-order_taker-token1][maker2-order_maker-token1][maker2-order_taker-token1]...'
                 /// ignoring TRANSFER_FROM_CONTRACT and TRANSFER_TO_CONTRACT commands, since they are transfers between makers
                 if (
                     (unpackTakerAmounts && order.commands[commandsInd + j] != 0x08) ||  // Commands.TRANSFER_FROM_CONTRACT=0x08
@@ -100,6 +101,9 @@ library BlendAggregateOrderLib {
                 ) {
                     bool isNew = true;
                     address token = unpackTakerAmounts ? order.taker_tokens[i][j] : order.maker_tokens[i][j];
+                    if (order.commands[commandsInd + j] == 0x04) { // Commands.NATIVE_TRANSFER=0x04
+                        token = NATIVE_TOKEN;
+                    }
                     uint256 amount = unpackTakerAmounts ? order.taker_amounts[i][j] : (
                         oldAggregateQuote.useOldAmount ? oldAggregateQuote.makerAmounts[i][j] : order.maker_amounts[i][j]
                     );

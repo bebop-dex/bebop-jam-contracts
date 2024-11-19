@@ -29,6 +29,7 @@ library BlendMultiOrderLib {
     string internal constant PERMIT2_ORDER_TYPE = string(
         abi.encodePacked("MultiOrder witness)", ORDER_TYPE, "TokenPermissions(address token,uint256 amount)")
     );
+    address internal constant NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /// @notice hash the given order using same schema as in BebopBlend contract
     /// @param order the order to hash
@@ -67,5 +68,13 @@ library BlendMultiOrderLib {
         return details;
     }
 
+    /// @notice Get maker tokens from the order
+    /// replace all tokens with command=0x04(Commands.NATIVE_TRANSFER) with native token address
+    function getMakerTokens(BlendMultiOrder memory order) internal pure returns (address[] memory makerTokens) {
+        makerTokens = new address[](order.maker_tokens.length);
+        for (uint i; i < order.maker_tokens.length; ++i) {
+            makerTokens[i] = order.commands[i] == 0x04 ? NATIVE_TOKEN : order.maker_tokens[i];
+        }
+    }
 
 }

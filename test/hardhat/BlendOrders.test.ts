@@ -50,14 +50,14 @@ describe("BlendOrders", function () {
 
 
   async function settleBebopBlendSingle(
-      order: BlendSingleOrderStruct, hooks: JamHooks.DefStruct, oldQuoteSingle: IBebopBlend.OldSingleQuoteStruct | null = null
+      order: BlendSingleOrderStruct, hooks: JamHooks.DefStruct, oldQuoteSingle: IBebopBlend.OldSingleQuoteStruct | null = null, makerAddress: string | null = null
   ) {
     const { user, settlement, directMaker, balanceManager } = fixture;
     await approveTokens([order.taker_token], [order.taker_amount], user, PERMIT2_ADDRESS);
     await approveTokens([order.maker_token], [order.maker_amount],  directMaker, bebop.address)
 
     let makerSignature: IBebopBlend.MakerSignatureStruct = {
-        signatureBytes: await makerSignBlendOrder(directMaker, order, bebop.address),
+        signatureBytes: await makerSignBlendOrder(directMaker, order, bebop.address, 0, makerAddress),
         flags: 0
     }
     let hooksHash = hooks === emptyHooks ? emptyHooksHash : utils.keccak256(
@@ -71,7 +71,7 @@ describe("BlendOrders", function () {
       }
     }
     let signature = await signBlendSingleOrderAndPermit2(balanceManager.address, user, order, hooksHash, 0, oldQuoteSingle)
-    let orderBytes = encodeSingleBlendOrderArgsForJam(order, makerSignature, oldQuoteSingle, signature)
+    let orderBytes = encodeSingleBlendOrderArgsForJam(order, makerSignature, oldQuoteSingle, makerAddress || order.maker_address, signature)
 
     let userBalancesBefore = await getBalancesBefore([order.maker_token], order.receiver)
     let encodedHooks = encodeHooks(hooks);
@@ -80,7 +80,8 @@ describe("BlendOrders", function () {
     await verifyBalancesAfter([order.maker_token], order.receiver, order.receiver === fixture.settlement.address ?
         amounts.map(_ => BigNumber.from(0)) : amounts, userBalancesBefore)
     await expect(res).to.emit(settlement, "BebopBlendSingleOrderFilled").withArgs(
-        getEventId(BigNumber.from(order.flags)), order.receiver, order.taker_token, order.maker_token,  order.taker_amount, amounts[0]
+        getEventId(BigNumber.from(order.flags)), order.receiver, order.taker_token,
+        order.receiver === fixture.settlement.address ? NATIVE_TOKEN : order.maker_token,  order.taker_amount, amounts[0]
     )
   }
 
@@ -106,7 +107,7 @@ describe("BlendOrders", function () {
         utils.defaultAbiCoder.encode(fixture.settlement.interface.getFunction("hashHooks").inputs, [hooks])
     )
     let signature = await signBlendMultiOrderAndPermit2(balanceManager.address, user, order, hooksHash, 0, oldQuoteMulti)
-    let orderBytes = encodeMultiBlendOrderArgsForJam(order, makerSignature, oldQuoteMulti, signature)
+    let orderBytes = encodeMultiBlendOrderArgsForJam(order, makerSignature, oldQuoteMulti, order.maker_address, signature)
     let userBalancesBefore = await getBalancesBefore(order.maker_tokens, order.receiver)
     let res = await settlement.connect(fixture.executor).settleBebopBlend(user.address, 1, orderBytes, "0x");
     let amounts = oldQuoteMulti.useOldAmount ? oldQuoteMulti.makerAmounts : order.maker_amounts
@@ -160,6 +161,7 @@ describe("BlendOrders", function () {
     if (allWrappedIsNative && buyTokensAmounts.has(TOKENS.WETH)){
       buyTokensAmounts.set(NATIVE_TOKEN, buyTokensAmounts.get(TOKENS.WETH)!)
       buyTokensAmounts.delete(TOKENS.WETH)
+      buyTokens = buyTokens.map(t => t === TOKENS.WETH ? NATIVE_TOKEN : t)
     }
     let userBalancesBefore = await getBalancesBefore(Array.from(buyTokensAmounts.keys()), order.receiver)
     let res = await settlement.connect(fixture.executor).settleBebopBlend(user.address, 2, orderBytes, "0x");
@@ -258,6 +260,13 @@ describe("BlendOrders", function () {
     }
     await settleBebopBlendSingle(order, hooks)
   })
+
+  it('BebopBlend: SingleOrder with another maker', async function () {
+    let order: BlendSingleOrderStruct = getSingleBlendOrder(
+        "Simple", fixture.settlement.address, fixture.bebopMaker.address, fixture.user.address
+    )
+    await settleBebopBlendSingle(order, emptyHooks, null, fixture.directMaker.address)
+  });
 
 
   //-----------------------------------------
