@@ -3,7 +3,6 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../../../src/interfaces/IPermit2.sol";
 
 interface IEIP1271Wallet {
     function isValidSignature(
@@ -75,13 +74,5 @@ contract EIP1271Wallet is IEIP1271Wallet {
         address spender
     ) external {
         IERC20(token).approve(spender, type(uint256).max);
-    }
-
-    function permit(
-        address permit2,
-        bytes memory signature,
-        IPermit2.PermitBatch memory batch
-    ) external {
-        IPermit2(permit2).permit(address(this), batch, signature);
     }
 }

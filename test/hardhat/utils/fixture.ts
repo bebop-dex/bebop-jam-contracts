@@ -1,28 +1,31 @@
-import {ethers, network} from "hardhat";
+import {ethers, network, waffle} from "hardhat";
 import {expect} from "chai";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
   BINANCE_ADDRESS,
   ETH_FOR_BLOCK,
   ETH_RPC,
-  NFT_COLLECTOR,
-  NFTS_ERC1155,
-  NFTS_ERC721,
   PERMIT2_ADDRESS,
   TOKENS
 } from "../config";
+import BebopSettlementABI from "../blend/BebopSettlement.json";
+import SmartWalletABI from "./EIP1271Wallet.json";
+import {BebopSettlement} from "../../../typechain-types";
+import {EIP1271Wallet} from "../../../typechain-types";
 
 
-async function getFunds(walletsWithFunds: SignerWithAddress[], solverAddr: string){
+async function getFunds(walletsWithFunds: (SignerWithAddress | EIP1271Wallet)[]){
   let amount = ethers.utils.parseEther("90") // ETH
   for (let wallet of walletsWithFunds) {
     // Get 90 WETH
-    await wallet.sendTransaction({
-      to: TOKENS.WETH,
-      value: amount
-    })
-    let WETH_Contract = await ethers.getContractAt("IERC20", TOKENS.WETH)
-    expect(await WETH_Contract.balanceOf(wallet.address)).to.equal(amount);
+    if (wallet instanceof SignerWithAddress) {
+      await wallet.sendTransaction({
+        to: TOKENS.WETH,
+        value: amount
+      })
+      let WETH_Contract = await ethers.getContractAt("IERC20", TOKENS.WETH)
+      expect(await WETH_Contract.balanceOf(wallet.address)).to.equal(amount);
+    }
 
     // Get other tokens
     for (let token of Object.values(TOKENS)) {
@@ -39,30 +42,6 @@ async function getFunds(walletsWithFunds: SignerWithAddress[], solverAddr: strin
       expect(await tokenContract.balanceOf(wallet.address)).to.equal(tokenBalance);
     }
   }
-  const getReceiverAddress = (to: string) => {
-    if (to === "solver") return solverAddr;
-    if (to === "taker") return walletsWithFunds[0].address;
-    if (to === "maker") return walletsWithFunds[3].address;
-    return ""
-  }
-  await network.provider.request({
-    method: "hardhat_impersonateAccount",
-    params: [NFT_COLLECTOR],
-  });
-  for (let token of Object.values(NFTS_ERC721)) {
-    const binance = await ethers.provider.getSigner(NFT_COLLECTOR);
-    let tokenContract = await ethers.getContractAt("IERC721", token.address)
-    let receiver = getReceiverAddress(token.to)
-    await tokenContract.connect(binance).transferFrom(NFT_COLLECTOR, receiver, token.id);
-    expect(await tokenContract.balanceOf(receiver)).to.equal(1);
-  }
-  for (let token of Object.values(NFTS_ERC1155)) {
-    const binance = await ethers.provider.getSigner(NFT_COLLECTOR);
-    let tokenContract = await ethers.getContractAt("IERC1155", token.address)
-    let receiver = getReceiverAddress(token.to)
-    await tokenContract.connect(binance).safeTransferFrom(NFT_COLLECTOR, receiver, token.id, token.amount, "0x");
-    expect(await tokenContract.balanceOf(receiver, token.id)).to.equal(token.amount);
-  }
 }
 
 export async function getFixture () {
@@ -78,10 +57,18 @@ export async function getFixture () {
     ],
   });
 
-  const [deployer, solver, user, anotherUser, bebopMaker, directMaker, ...users] = await ethers.getSigners();
+  const [deployer, solver, executor, user, anotherUser, bebopMaker, bebopMaker2, bebopMaker3, directMaker, treasuryAddress,, ...users] = await ethers.getSigners();
+
+  const bebopBlend = await waffle.deployContract(deployer, BebopSettlementABI, [
+    TOKENS.WETH,
+    PERMIT2_ADDRESS,
+    TOKENS.DAI
+  ]) as BebopSettlement;
+
+  const takerSmartWallet = await waffle.deployContract(deployer, SmartWalletABI, []) as EIP1271Wallet;
 
   const JamSettlement = await ethers.getContractFactory("JamSettlement");
-  const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS, TOKENS.DAI);
+  const settlement = await JamSettlement.deploy(PERMIT2_ADDRESS, bebopBlend.address, treasuryAddress.address);
   await settlement.deployed();
 
   const JamSolver = await ethers.getContractFactory("JamSolver");
@@ -92,24 +79,31 @@ export async function getFixture () {
   const JamBalanceManager = await ethers.getContractFactory("JamBalanceManager");
   const balanceManager = await JamBalanceManager.attach(balanceManagerAddress);
 
-  let walletsWithFunds = [user, anotherUser, bebopMaker, directMaker, solver]
-  await getFunds(walletsWithFunds, solverContract.address)
-  console.log("User", user.address)
-  console.log("BebopMaker", bebopMaker.address)
-  console.log("DirectMaker", directMaker.address)
-  console.log("SolverContract", solverContract.address)
-  console.log("BalanceManager", balanceManager.address)
-  console.log("Settlement", settlement.address)
+  let walletsWithFunds = [user, anotherUser, bebopMaker, bebopMaker2, bebopMaker3, directMaker, solver, takerSmartWallet]
+  await getFunds(walletsWithFunds)
+  // console.log("User", user.address)
+  // console.log("BebopMaker", bebopMaker.address)
+  // console.log("DirectMaker", directMaker.address)
+  // console.log("SolverContract", solverContract.address)
+  // console.log("BalanceManager", balanceManager.address)
+  // console.log("BebopBlend", bebopBlend.address)
+  // console.log("Settlement", settlement.address)
 
   return {
     deployer,
     solver,
+    executor,
     solverContract,
     user,
     anotherUser,
     bebopMaker,
+    bebopMaker2,
+    bebopMaker3,
     settlement,
     balanceManager,
-    directMaker
+    directMaker,
+    bebopBlend,
+    treasuryAddress,
+    takerSmartWallet
   }
 }

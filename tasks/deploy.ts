@@ -1,5 +1,5 @@
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
-import { getPermit2Address, getDaiAddress } from './addresses'
+import {getBebopBlendAddress, getPermit2Address, getTreasuryAddress} from './addresses'
 
 export default async function deploy(
   params: any,
@@ -9,9 +9,10 @@ export default async function deploy(
   console.log("Deploying JamSettlement...");
   const chainId = (await ethers.provider.getNetwork()).chainId
   const permit2Address = getPermit2Address(chainId)
-  const daiAddress = getDaiAddress(chainId)
+  const bebopBlendAddress = getBebopBlendAddress(chainId)
+  const treasuryAddress = getTreasuryAddress(chainId)
   const JamSettlement = await ethers.getContractFactory("JamSettlement");
-  const settlement = await JamSettlement.deploy(permit2Address, daiAddress);
+  const settlement = await JamSettlement.deploy(permit2Address, bebopBlendAddress, treasuryAddress);
   console.log("Hash:", settlement.deployTransaction.hash);
   await settlement.deployed();
   console.log("JamSettlement deployed to:", settlement.address);

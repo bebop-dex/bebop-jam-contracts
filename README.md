@@ -1,5 +1,3 @@
-#### Please treat all work within this repository, including all branches, as confidential.
-
 # Bebop Jam
 
 ![Alt text](bebop.gif?raw=true "Title")
@@ -7,14 +5,38 @@
 ![Github Actions](https://github.com/bebop-dex/bebop-jam-contracts/workflows/test/badge.svg)
 
 
+
+### Setup
+
+*  Install:
+```bash
+npm install
+forge build
+```
+
+*  Tests(hardhat)
+```bash
+npm run test:jam
+npm run test:blend
+```
+
+*  Tests(foundry)
+```bash
+forge test
+```
+
+### Description
+
 JAM (Just-in-Time Aggregation Model) is Bebop's DeFi liquidity aggregator system allowing any token to any token swaps with highly efficient execution quality.
 
 JAM Solvers are independently run services that provide quotes to Bebop users on an RFQ (Request for Quote) basis. They are responsible for providing accurate prices and reliably executing swaps for the given quotes.
 
+
+
 ### Trade flow
 From  a  systems  perspective,  how  the  trade  is conducted can be defined as follows:
 
-1.Bebop  JAM  orchestrator  receives  an  order request in the form: Buy  1000  Token  A  -  Sell  Token  B  - Slippage: 0. The requests support orders for    multiple    tokens    being    exchanged simultaneously.
+1.Bebop  JAM  orchestrator  receives  an  order request in the form: Buy  1000  Token  A  -  Sell  Token  B  - Slippage: 0.1. The requests support orders for    multiple    tokens    being    exchanged simultaneously.
 
 2.It queries solvers for a solution to the trade; the best solution is returned to the user.
 
@@ -26,72 +48,56 @@ From  a  systems  perspective,  how  the  trade  is conducted can be defined as 
 
 6.The  solver  returns  the  transaction  to  the orchestrator and eventually the user.
 
-### Order
+### JamOrder
 The smart contract is used for both regular trades and limit orders. The only difference between a limit order and a regular one is that order.expiry will be infinite in limit orders. \
-A trade can be absolutely any combination of NATIVE/ERC20/ERC721/ERC1155 in any quantity, for example: \
+A trade can be absolutely any combination of NATIVE/ERC20 in any quantity, for example: \
 USDT <-> WETH \
 USDT + USDC <-> WETH \
 USDT <->  USDC + WETH + WBTC \
-WETH <-> NFT \
-NFT + USDC <-> ETH + USDT \
 ...
 ```solidity
-struct Data {
-    address taker;
+struct JamOrder {
+    address taker; // user
     address receiver;
     uint256 expiry;
-    uint256 nonce; // unique nonce based on quote-id
-    uint16 minFillPercent; // 100% = 10000, if taker allows partial fills could be less than 100%
-    bytes32 hooksHash; // produced by hashHooks() = keccak256(pre interactions + post interactions)
+    uint256 exclusivityDeadline; // if block.timestamp > exclusivityDeadline, then order can be executed by any executor
+    uint256 nonce;
+    address executor; // only msg.sender=executor is allowed to execute (if executor=address(0), then order can be executed by anyone)
+    uint256 partnerInfo; // partnerInfo is a packed struct of feePercent and feeRecipient
     address[] sellTokens;
     address[] buyTokens;
     uint256[] sellAmounts;
     uint256[] buyAmounts;
-    uint256[] sellNFTIds;
-    uint256[] buyNFTIds;
-    bytes sellTokenTransfers; // Commands sequence of sellToken transfer types
-    bytes buyTokenTransfers; // Commands sequence of buyToken transfer types
+    bool usingPermit2; // this field is excluded from ORDER_TYPE, so taker doesnt need to sign it
 }
 ```
 
-Commands are used to specify how tokens are transferred in buyTokenTransfers and sellTokenTransfers
-```solidity
-library Commands {
-    bytes1 internal constant SIMPLE_TRANSFER = 0x00; // simple transfer with standard transferFrom
-    bytes1 internal constant PERMIT2_TRANSFER = 0x01; // transfer using permit2.transfer
-    bytes1 internal constant CALL_PERMIT_THEN_TRANSFER = 0x02; // call permit then simple transfer
-    bytes1 internal constant CALL_PERMIT2_THEN_TRANSFER = 0x03; // call permit2.permit then permit2.transfer
-    bytes1 internal constant NATIVE_TRANSFER = 0x04; // transfer of ETH for mainnet, MATIC for polygon , etc
-    bytes1 internal constant NFT_ERC721_TRANSFER = 0x05;
-    bytes1 internal constant NFT_ERC1155_TRANSFER = 0x06;
-}
-```
 
 ### Settlement
 Solvers/Makers have three options how to execute trade:
-1) `settle` (or `settleWithPermitsSignatures` if quote has approval_type=permits)
+1) `settle`
 ```solidity
-function settle(
-    JamOrder.Data calldata order,
-    Signature.TypedSignature calldata signature,
+ function settle(
+    JamOrder calldata order,
+    bytes calldata signature,
     JamInteraction.Data[] calldata interactions,
-    JamHooks.Def calldata hooks,
-    ExecInfo.SolverData calldata solverData
+    bytes memory hooksData,
+    address balanceRecipient
 )
 ```
-`JamOrder.Data order` - all information about the order signed by the taker (passed to the solver via API) \
-`Signature.TypedSignature signature` - taker signature and signature type (passed to the solver via API) \
-`JamInteraction.Data[] interactions` - solver's interactions to provide the requested assets in the order \
-`JamHooks.Def hooks` - pre and post interactions specified by taker (for example swap + bridge) (passed to the solver via API) \
-`ExecInfo.SolverData solverData` - solver's extra information about execution
+`JamOrder order` - all information about the order signed by the taker (passed to the solver via API) \
+`bytes calldata signature` - taker signature, can be order signature or permit2+order signature (passed to the solver via API) \
+`JamInteraction.Data[] interactions` - solver's interactions to provide the requested assets in the order(like swap on Uniswap etc) \
+`bytes memory hooksData` - pre and post interactions specified by taker (for example swap + bridge) (passed to the solver via API) \
+`balanceRecipient` - solver's information about where to send initial taker's tokens
 
-2) `settleInternal` (or `settleInternalWithPermitsSignatures` if quote has approval_type=permits)
+2) `settleInternal`
 ```solidity
 function settleInternal(
-    JamOrder.Data calldata order,
-    Signature.TypedSignature calldata signature,
-    JamHooks.Def calldata hooks,
-    ExecInfo.MakerData calldata makerData
+    JamOrder calldata order,
+    bytes calldata signature,
+    uint256[] calldata filledAmounts,
+    bytes memory hooksData
 )
 ```
 This approach is cheaper in gas and may be suitable for makers who provide liquidity directly. 
@@ -99,56 +105,26 @@ This approach is cheaper in gas and may be suitable for makers who provide liqui
 3) `settleBatch` - solver can submit batch of orders if it wins them around the same time
 ```solidity
 function settleBatch(
-    JamOrder.Data[] calldata orders,
-    Signature.TypedSignature[] calldata signatures,
-    Signature.TakerPermitsInfo[] calldata takersPermitsInfo,
+    JamOrder[] calldata orders,
+    bytes[] calldata signatures,
     JamInteraction.Data[] calldata interactions,
     JamHooks.Def[] calldata hooks,
-    ExecInfo.BatchSolverData calldata solverData
+    address balanceRecipient
+) 
+```
+
+### BlendOrders
+
+Also this contract can be used as an entry point for the immutable BebopBlend contract that is deployed and verified on 0xbbbbbBB520d69a9775E85b458C58c648259FAD5F address. \
+This is done to add Permit2+Witness functionality to BebopBlend contract. \
+Users will sign Permit2 + witness of BlendSingleOrder, BlendMultiOrder or BlendAggregateOrder(these structs are copypasted from BebopBlend contract) \
+But the only difference from real settlement on BebopBlend contract is that BlendOrder.taker will be current contract address, instead of user address.
+
+```solidity
+function settleBebopBlend(
+    address takerAddress, // real user address
+    IBebopBlend.BlendOrderType orderType, // order type: single=0, multi=1 or aggregate=2
+    bytes memory data, // encoded calldata for settle function of BebopBlend
+    bytes memory hooksData
 )
-```
-
-### Tests
-
-*  Hardhat tests:
-```bash
-npm install
-hardhat compile
-hardhat test
-```
-
- *  Foundry tests(WIP): 
-```bash
-forge test
-```
-
-### Slither + Slitherin (extra detectors)
-
-Install original slither and extra detectors:
-```shell
-pip3 install slither-analyzer
-git clone https://github.com/pessimistic-io/slitherin.git
-cd slitherin
-python3 setup.py develop
-```
-Run slither:
-```shell
-slither --config-file slither.config.json --checklist . > slither.md
-```
-
-# Deploying to ZKSync
-
-```
-// Compile
-npm install
-forge install
-npm run compile -- --network zkSyncTestnet
-
-// Deploy
-PRIVATE_KEY='xxx' npx hardhat deploy-zksync --script deploy/deployZkSync.ts --network zkSyncTestnet
-// Take the JamSettlement contract address
-
-// Verify
-npx hardhat verify --show-stack-traces --network zkSyncTestnet --no-compile <JamSettlement Contract Address> 0x0000000000225e31D15943971F47aD3022F714Fa 0x0000000000000000000000000000000000000000
-
 ```

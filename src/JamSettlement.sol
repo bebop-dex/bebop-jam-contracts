@@ -1,205 +1,219 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.27;
 
 import "./JamBalanceManager.sol";
-import "./base/JamSigning.sol";
+import "./base/JamValidation.sol";
 import "./base/JamTransfer.sol";
 import "./interfaces/IJamBalanceManager.sol";
 import "./interfaces/IJamSettlement.sol";
-import "./libraries/JamInteraction.sol";
-import "./libraries/JamOrder.sol";
-import "./libraries/JamHooks.sol";
-import "./libraries/ExecInfo.sol";
-import "./libraries/common/BMath.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
-import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title JamSettlement
 /// @notice The settlement contract executes the full lifecycle of a trade on chain.
 /// Solvers figure out what "interactions" to pass to this contract such that the user order is fulfilled.
 /// The contract ensures that only the user agreed price can be executed and otherwise will fail to execute.
 /// As long as the trade is fulfilled, the solver is allowed to keep any potential excess.
-contract JamSettlement is IJamSettlement, ReentrancyGuard, JamSigning, JamTransfer, ERC721Holder, ERC1155Holder {
+contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTransfer {
 
     IJamBalanceManager public immutable balanceManager;
+    address public immutable bebopBlend;
+    using BlendAggregateOrderLib for BlendAggregateOrder;
+    using BlendMultiOrderLib for BlendMultiOrder;
 
-    constructor(address _permit2, address _daiAddress) {
-        balanceManager = new JamBalanceManager(address(this), _permit2, _daiAddress);
+    constructor(address _permit2, address _bebopBlend, address _treasuryAddress) JamPartner(_treasuryAddress) {
+        balanceManager = new JamBalanceManager(address(this), _permit2);
+        bebopBlend = _bebopBlend;
     }
 
     receive() external payable {}
 
-    function runInteractions(JamInteraction.Data[] calldata interactions) internal returns (bool result) {
-        for (uint i; i < interactions.length; ++i) {
-            // Prevent calls to balance manager
-            require(interactions[i].to != address(balanceManager));
-            bool execResult = JamInteraction.execute(interactions[i]);
-
-            // Return false only if interaction was meant to succeed but failed.
-            if (!execResult && interactions[i].result) return false;
-        }
-        return true;
-    }
 
     /// @inheritdoc IJamSettlement
     function settle(
-        JamOrder.Data calldata order,
-        Signature.TypedSignature calldata signature,
+        JamOrder calldata order,
+        bytes calldata signature,
         JamInteraction.Data[] calldata interactions,
-        JamHooks.Def calldata hooks,
-        ExecInfo.SolverData calldata solverData
+        bytes memory hooksData,
+        address balanceRecipient
     ) external payable nonReentrant {
-        validateOrder(order, hooks, signature, solverData.curFillPercent);
-        require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
-        balanceManager.transferTokens(
-            IJamBalanceManager.TransferData(
-                order.taker, solverData.balanceRecipient, order.sellTokens, order.sellAmounts,
-                order.sellNFTIds, order.sellTokenTransfers, solverData.curFillPercent
-            )
+        JamHooks.Def memory hooks = hooksData.length != 0 ?
+            abi.decode(hooksData, (JamHooks.Def)) : JamHooks.Def(new JamInteraction.Data[](0), new JamInteraction.Data[](0));
+        bytes32 hooksHash = hooksData.length != 0 ? JamHooks.hash(hooks) : JamHooks.EMPTY_HOOKS_HASH;
+        validateOrder(order, signature, hooksHash);
+        if (hooksHash != JamHooks.EMPTY_HOOKS_HASH){
+            require(JamInteraction.runInteractionsM(hooks.beforeSettle, balanceManager), BeforeSettleHooksFailed());
+        }
+        if (order.usingPermit2) {
+            balanceManager.transferTokensWithPermit2(order, signature, hooksHash, balanceRecipient);
+        } else {
+            balanceManager.transferTokens(order.sellTokens, order.sellAmounts, order.taker, balanceRecipient);
+        }
+        require(JamInteraction.runInteractions(interactions, balanceManager), InteractionsFailed());
+        uint256[] memory buyAmounts = order.buyAmounts;
+        transferTokensFromContract(order.buyTokens, order.buyAmounts, buyAmounts, order.receiver, order.partnerInfo, false);
+        if (order.receiver == address(this)){
+            require(!hasDuplicates(order.buyTokens), DuplicateTokens());
+        }
+        emit BebopJamOrderFilled(
+            order.nonce, order.taker, order.sellTokens, order.buyTokens, order.sellAmounts, buyAmounts
         );
-        _settle(order, interactions, hooks, solverData.curFillPercent);
+        if (hooksHash != JamHooks.EMPTY_HOOKS_HASH){
+            require(JamInteraction.runInteractionsM(hooks.afterSettle, balanceManager), AfterSettleHooksFailed());
+        }
     }
 
-    /// @inheritdoc IJamSettlement
-    function settleWithPermitsSignatures(
-        JamOrder.Data calldata order,
-        Signature.TypedSignature calldata signature,
-        Signature.TakerPermitsInfo calldata takerPermitsInfo,
-        JamInteraction.Data[] calldata interactions,
-        JamHooks.Def calldata hooks,
-        ExecInfo.SolverData calldata solverData
-    ) external payable nonReentrant {
-        validateOrder(order, hooks, signature, solverData.curFillPercent);
-        require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
-        balanceManager.transferTokensWithPermits(
-            IJamBalanceManager.TransferData(
-                order.taker, solverData.balanceRecipient, order.sellTokens, order.sellAmounts,
-                order.sellNFTIds, order.sellTokenTransfers, solverData.curFillPercent
-            ), takerPermitsInfo
-        );
-        _settle(order, interactions, hooks, solverData.curFillPercent);
-    }
 
     /// @inheritdoc IJamSettlement
     function settleInternal(
-        JamOrder.Data calldata order,
-        Signature.TypedSignature calldata signature,
-        JamHooks.Def calldata hooks,
-        ExecInfo.MakerData calldata makerData
+        JamOrder calldata order,
+        bytes calldata signature,
+        uint256[] calldata filledAmounts,
+        bytes memory hooksData
     ) external payable nonReentrant {
-        validateOrder(order, hooks, signature, makerData.curFillPercent);
-        require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
-        balanceManager.transferTokens(
-            IJamBalanceManager.TransferData(
-                order.taker, msg.sender, order.sellTokens, order.sellAmounts,
-                order.sellNFTIds, order.sellTokenTransfers, makerData.curFillPercent
-            )
-        );
-        _settleInternal(order, hooks, makerData);
+        JamHooks.Def memory hooks = hooksData.length != 0 ?
+            abi.decode(hooksData, (JamHooks.Def)) : JamHooks.Def(new JamInteraction.Data[](0),new JamInteraction.Data[](0));
+        bytes32 hooksHash = hooksData.length != 0 ? JamHooks.hash(hooks) : JamHooks.EMPTY_HOOKS_HASH;
+        validateOrder(order, signature, hooksHash);
+        if (hooksHash != JamHooks.EMPTY_HOOKS_HASH){
+            require(JamInteraction.runInteractionsM(hooks.beforeSettle, balanceManager), BeforeSettleHooksFailed());
+        }
+        if (order.usingPermit2) {
+            balanceManager.transferTokensWithPermit2(order, signature, hooksHash, msg.sender);
+        } else {
+            balanceManager.transferTokens(order.sellTokens, order.sellAmounts, order.taker, msg.sender);
+        }
+        if (order.partnerInfo == 0){
+            uint256[] calldata buyAmounts = validateFilledAmounts(filledAmounts, order.buyAmounts);
+            balanceManager.transferTokens(order.buyTokens, buyAmounts, msg.sender, order.receiver);
+            emit BebopJamOrderFilled(order.nonce, order.taker, order.sellTokens, order.buyTokens, order.sellAmounts, buyAmounts);
+        } else {
+            (
+                uint256[] memory buyAmounts, uint256[] memory protocolFees, uint256[] memory partnerFees, address partner
+            ) = getUpdatedAmountsAndFees(filledAmounts, order.buyAmounts, order.partnerInfo);
+            balanceManager.transferTokens(order.buyTokens, buyAmounts, msg.sender, order.receiver);
+            if (protocolFees.length != 0){
+                balanceManager.transferTokens(order.buyTokens, protocolFees, msg.sender, protocolFeeAddress);
+            }
+            if (partnerFees.length != 0){
+                balanceManager.transferTokens(order.buyTokens, partnerFees, msg.sender, partner);
+            }
+            emit BebopJamOrderFilled(order.nonce, order.taker, order.sellTokens, order.buyTokens, order.sellAmounts, buyAmounts);
+        }
+        if (hooksHash != JamHooks.EMPTY_HOOKS_HASH){
+            require(JamInteraction.runInteractionsM(hooks.afterSettle, balanceManager), AfterSettleHooksFailed());
+        }
     }
 
-    /// @inheritdoc IJamSettlement
-    function settleInternalWithPermitsSignatures(
-        JamOrder.Data calldata order,
-        Signature.TypedSignature calldata signature,
-        Signature.TakerPermitsInfo calldata takerPermitsInfo,
-        JamHooks.Def calldata hooks,
-        ExecInfo.MakerData calldata makerData
-    ) external payable nonReentrant {
-        validateOrder(order, hooks, signature, makerData.curFillPercent);
-        require(runInteractions(hooks.beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
-        balanceManager.transferTokensWithPermits(
-            IJamBalanceManager.TransferData(
-                order.taker, msg.sender, order.sellTokens, order.sellAmounts,
-                order.sellNFTIds, order.sellTokenTransfers, makerData.curFillPercent
-            ), takerPermitsInfo
-        );
-        _settleInternal(order, hooks, makerData);
-    }
 
     /// @inheritdoc IJamSettlement
     function settleBatch(
-        JamOrder.Data[] calldata orders,
-        Signature.TypedSignature[] calldata signatures,
-        Signature.TakerPermitsInfo[] calldata takersPermitsInfo,
+        JamOrder[] calldata orders,
+        bytes[] calldata signatures,
         JamInteraction.Data[] calldata interactions,
         JamHooks.Def[] calldata hooks,
-        ExecInfo.BatchSolverData calldata solverData
+        address balanceRecipient
     ) external payable nonReentrant {
-        validateBatchOrders(orders, hooks, signatures, takersPermitsInfo, solverData.takersPermitsUsage, solverData.curFillPercents);
-        bool isMaxFill = solverData.curFillPercents.length == 0;
+        validateBatchOrders(orders, hooks, signatures);
         bool executeHooks = hooks.length != 0;
-        uint takersPermitsInd;
         for (uint i; i < orders.length; ++i) {
             if (executeHooks){
-                require(runInteractions(hooks[i].beforeSettle), "BEFORE_SETTLE_HOOKS_FAILED");
+                require(JamInteraction.runInteractions(hooks[i].beforeSettle, balanceManager), BeforeSettleHooksFailed());
             }
-            if (solverData.takersPermitsUsage.length != 0 && solverData.takersPermitsUsage[i]){
-                balanceManager.transferTokensWithPermits(
-                    IJamBalanceManager.TransferData(
-                        orders[i].taker, solverData.balanceRecipient, orders[i].sellTokens, orders[i].sellAmounts,
-                        orders[i].sellNFTIds, orders[i].sellTokenTransfers, isMaxFill ? BMath.HUNDRED_PERCENT : solverData.curFillPercents[i]
-                    ), takersPermitsInfo[takersPermitsInd++]
+            if (orders[i].usingPermit2) {
+                balanceManager.transferTokensWithPermit2(
+                    orders[i], signatures[i], executeHooks ? JamHooks.hash(hooks[i]) : JamHooks.EMPTY_HOOKS_HASH, balanceRecipient
                 );
             } else {
-                balanceManager.transferTokens(
-                    IJamBalanceManager.TransferData(
-                        orders[i].taker, solverData.balanceRecipient, orders[i].sellTokens, orders[i].sellAmounts,
-                        orders[i].sellNFTIds, orders[i].sellTokenTransfers, isMaxFill ? BMath.HUNDRED_PERCENT : solverData.curFillPercents[i]
-                    )
-                );
+                balanceManager.transferTokens(orders[i].sellTokens, orders[i].sellAmounts, orders[i].taker, balanceRecipient);
             }
         }
-        require(runInteractions(interactions), "INTERACTIONS_FAILED");
+        require(JamInteraction.runInteractions(interactions, balanceManager), InteractionsFailed());
         for (uint i; i < orders.length; ++i) {
-            uint256[] memory curBuyAmounts = solverData.transferExactAmounts ?
-                orders[i].buyAmounts : calculateNewAmounts(i, orders, solverData.curFillPercents);
+            uint256[] memory buyAmounts = calculateNewAmounts(i, orders);
             transferTokensFromContract(
-                orders[i].buyTokens, curBuyAmounts, orders[i].buyNFTIds, orders[i].buyTokenTransfers,
-                orders[i].receiver, isMaxFill ? BMath.HUNDRED_PERCENT : solverData.curFillPercents[i], true
+                orders[i].buyTokens, orders[i].buyAmounts, buyAmounts, orders[i].receiver, orders[i].partnerInfo, true
+            );
+            emit BebopJamOrderFilled(
+                orders[i].nonce, orders[i].taker, orders[i].sellTokens, orders[i].buyTokens, orders[i].sellAmounts, buyAmounts
             );
             if (executeHooks){
-                require(runInteractions(hooks[i].afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
+                require(JamInteraction.runInteractions(hooks[i].afterSettle, balanceManager), AfterSettleHooksFailed());
             }
-            emit Settlement(orders[i].nonce);
         }
     }
 
-    function _settle(
-        JamOrder.Data calldata order,
-        JamInteraction.Data[] calldata interactions,
-        JamHooks.Def calldata hooks,
-        uint16 curFillPercent
-    ) private {
-        require(runInteractions(interactions), "INTERACTIONS_FAILED");
-        transferTokensFromContract(
-            order.buyTokens, order.buyAmounts, order.buyNFTIds, order.buyTokenTransfers, order.receiver, curFillPercent, false
-        );
-        if (order.receiver == address(this)){
-            require(!hasDuplicate(order.buyTokens, order.buyNFTIds, order.buyTokenTransfers), "DUPLICATE_TOKENS");
-            require(hooks.afterSettle.length > 0, "AFTER_SETTLE_HOOKS_REQUIRED");
-            for (uint i; i < hooks.afterSettle.length; ++i){
-                require(hooks.afterSettle[i].result, "POTENTIAL_TOKENS_LOSS");
-            }
+
+    /// @inheritdoc IJamSettlement
+    function settleBebopBlend(
+        address takerAddress,
+        IBebopBlend.BlendOrderType orderType,
+        bytes memory data,
+        bytes memory hooksData
+    ) external payable nonReentrant {
+        JamHooks.Def memory hooks = hooksData.length != 0 ?
+            abi.decode(hooksData, (JamHooks.Def)) : JamHooks.Def(new JamInteraction.Data[](0),new JamInteraction.Data[](0));
+        bytes32 hooksHash = hooksData.length != 0 ? JamHooks.hash(hooks) : JamHooks.EMPTY_HOOKS_HASH;
+        if (hooksHash != JamHooks.EMPTY_HOOKS_HASH){
+            require(JamInteraction.runInteractionsM(hooks.beforeSettle, balanceManager), BeforeSettleHooksFailed());
         }
-        require(runInteractions(hooks.afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
-        emit Settlement(order.nonce);
+        if (orderType == IBebopBlend.BlendOrderType.Single){
+            (
+                BlendSingleOrder memory order,
+                IBebopBlend.MakerSignature memory makerSignature,
+                IBebopBlend.OldSingleQuote memory takerQuoteInfo,
+                address makerAddress,
+                bytes memory takerSignature
+            ) = abi.decode(data, (BlendSingleOrder, IBebopBlend.MakerSignature, IBebopBlend.OldSingleQuote, address, bytes));
+            balanceManager.transferTokenForBlendSingleOrder(order, takerQuoteInfo, takerSignature, takerAddress, hooksHash);
+            order.maker_address = makerAddress;
+            approveToken(IERC20(order.taker_token), order.taker_amount, bebopBlend);
+            IBebopBlend(bebopBlend).settleSingle(order, makerSignature, 0, takerQuoteInfo, "0x");
+            emit BebopBlendSingleOrderFilled(
+                uint128(order.flags >> 128), order.receiver, order.taker_token,
+                (order.packed_commands & 0x02) != 0 ? JamOrderLib.NATIVE_TOKEN : order.maker_token, order.taker_amount,
+                takerQuoteInfo.useOldAmount ? takerQuoteInfo.makerAmount : order.maker_amount
+            );
+        } else if (orderType == IBebopBlend.BlendOrderType.Multi){
+            (
+                BlendMultiOrder memory order,
+                IBebopBlend.MakerSignature memory makerSignature,
+                IBebopBlend.OldMultiQuote memory takerQuoteInfo,
+                address makerAddress,
+                bytes memory takerSignature
+            ) = abi.decode(data, (BlendMultiOrder, IBebopBlend.MakerSignature, IBebopBlend.OldMultiQuote, address, bytes));
+            balanceManager.transferTokensForMultiBebopOrder(order, takerQuoteInfo, takerSignature, takerAddress, hooksHash);
+            order.maker_address = makerAddress;
+            for (uint i; i < order.taker_tokens.length; ++i) {
+                approveToken(IERC20(order.taker_tokens[i]), order.taker_amounts[i], bebopBlend);
+            }
+            IBebopBlend(bebopBlend).settleMulti(order, makerSignature, 0, takerQuoteInfo, "0x");
+            emit BebopBlendMultiOrderFilled(
+                uint128(order.flags >> 128), order.receiver, order.taker_tokens, order.getMakerTokens(), order.taker_amounts,
+                takerQuoteInfo.useOldAmount ? takerQuoteInfo.makerAmounts : order.maker_amounts
+            );
+        } else if (orderType == IBebopBlend.BlendOrderType.Aggregate){
+            (
+                BlendAggregateOrder memory order,
+                IBebopBlend.MakerSignature[] memory makerSignatures,
+                IBebopBlend.OldAggregateQuote memory takerQuoteInfo,
+                bytes memory takerSignature
+            ) = abi.decode(data, (BlendAggregateOrder, IBebopBlend.MakerSignature[], IBebopBlend.OldAggregateQuote, bytes));
+            balanceManager.transferTokensForAggregateBebopOrder(order, takerQuoteInfo, takerSignature, takerAddress, hooksHash);
+            (address[] memory tokens, uint256[] memory amounts) = order.unpackTokensAndAmounts(true, takerQuoteInfo);
+            for (uint i; i < tokens.length; ++i) {
+                approveToken(IERC20(tokens[i]), amounts[i], bebopBlend);
+            }
+            IBebopBlend(bebopBlend).settleAggregate(order, makerSignatures, 0, takerQuoteInfo, "0x");
+            (address[] memory buyTokens, uint256[] memory buyAmounts) = order.unpackTokensAndAmounts(false, takerQuoteInfo);
+            emit BebopBlendAggregateOrderFilled(
+                uint128(order.flags >> 128), order.receiver, tokens, buyTokens, amounts, buyAmounts
+            );
+        } else {
+            revert InvalidBlendOrderType();
+        }
+        if (hooksHash != JamHooks.EMPTY_HOOKS_HASH){
+            require(JamInteraction.runInteractionsM(hooks.afterSettle, balanceManager), AfterSettleHooksFailed());
+        }
     }
 
-    function _settleInternal(
-        JamOrder.Data calldata order,
-        JamHooks.Def calldata hooks,
-        ExecInfo.MakerData calldata makerData
-    ) private {
-        uint256[] calldata buyAmounts = validateIncreasedAmounts(makerData.increasedBuyAmounts, order.buyAmounts);
-        balanceManager.transferTokens(
-            IJamBalanceManager.TransferData(
-                msg.sender, order.receiver, order.buyTokens, buyAmounts,
-                order.buyNFTIds, order.buyTokenTransfers, makerData.curFillPercent
-            )
-        );
-        require(runInteractions(hooks.afterSettle), "AFTER_SETTLE_HOOKS_FAILED");
-        emit Settlement(order.nonce);
-    }
 }

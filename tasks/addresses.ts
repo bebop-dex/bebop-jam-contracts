@@ -15,37 +15,15 @@ function getPermit2Address(chainId: number) {
   throw new Error("Permit2 address not specified.")
 }
 
-function getDaiAddress(chainId: number) {
-  switch(chainId) {
-    case 1:
-      return '0x6B175474E89094C44Da98b954EedeAC495271d0F'
-    case 137:
-      return '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063'
-    case 42161:
-      return '0x0000000000000000000000000000000000000000'
-    case 43114:
-      return '0x0000000000000000000000000000000000000000'
-    case 56:
-      return '0x0000000000000000000000000000000000000000'
-    case 300:
-      return '0x0000000000000000000000000000000000000000'
-    case 324:
-      return '0x0000000000000000000000000000000000000000'
-    case 10:
-      return '0x0000000000000000000000000000000000000000'
-    case 34443:
-      return '0x0000000000000000000000000000000000000000'
-    case 8453:
-      return '0x0000000000000000000000000000000000000000'
-    case 534352:
-      return '0x0000000000000000000000000000000000000000'
-    case 167000:
-      return '0x0000000000000000000000000000000000000000'
-    case 80084:
-      return '0x0000000000000000000000000000000000000000'
-    default:
-      throw new Error("Dai address not specified.")
+function getBebopBlendAddress(chainId: number) {
+  if ([137, 1, 42161, 56, 10, 8453, 167000].includes(chainId)) {
+    return '0xbbbbbBB520d69a9775E85b458C58c648259FAD5F'
   }
+  throw new Error("BebopBlend address not specified.")
 }
 
-export { getPermit2Address, getDaiAddress }
+function getTreasuryAddress(chainId: number): string {
+  throw new Error("Treasury address not specified.")
+}
+
+export { getPermit2Address, getBebopBlendAddress , getTreasuryAddress}
