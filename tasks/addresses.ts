@@ -8,9 +8,12 @@ function getPermit2Address(chainId: number) {
     return '0x0000000000225e31D15943971F47aD3022F714Fa'
   }
 
+  if (chainId === 80084) {
+    return "0xA4Bf80b2CFBd80C00cB0Cc3d74C8762Ff4762770"
+  }
+
   throw new Error("Permit2 address not specified.")
 }
-
 
 function getBebopBlendAddress(chainId: number) {
   if ([137, 1, 42161, 56, 10, 8453, 167000].includes(chainId)) {
