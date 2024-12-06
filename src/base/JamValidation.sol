@@ -5,6 +5,7 @@ import "../base/Errors.sol";
 import "../libraries/JamOrder.sol";
 import "../libraries/JamHooks.sol";
 import "@openzeppelin/contracts/interfaces/IERC1271.sol";
+import "../JamBalanceManager.sol";
 
 /// @title JamValidation
 /// @notice Functions which handles the signing and validation of Jam orders
@@ -21,15 +22,19 @@ abstract contract JamValidation {
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     ));
 
+    IJamBalanceManager public immutable balanceManager;
+    IPermit2 private immutable PERMIT2;
     bytes32 private immutable _CACHED_DOMAIN_SEPARATOR;
     uint256 private immutable _CACHED_CHAIN_ID;
     using JamOrderLib for JamOrder;
 
-    constructor(){
+    constructor(address _permit2){
+        balanceManager = new JamBalanceManager(address(this), _permit2);
         _CACHED_CHAIN_ID = block.chainid;
         _CACHED_DOMAIN_SEPARATOR = keccak256(
             abi.encode(EIP712_DOMAIN_TYPEHASH, DOMAIN_NAME, DOMAIN_VERSION, block.chainid, address(this))
         );
+        PERMIT2 = IPermit2(_permit2);
     }
 
     /// @notice The domain separator used in the order validation signature
@@ -81,8 +86,14 @@ abstract contract JamValidation {
     /// @notice Hash Jam order and return the hash
     /// @param order The order to hash
     /// @param hooksHash The hash of the hooks to include in the order hash, 0x000..00 if no hooks
-    function hashJamOrder(JamOrder calldata order, bytes32 hooksHash) external pure returns (bytes32) {
-        return order.hash(hooksHash);
+    function hashJamOrder(JamOrder calldata order, bytes32 hooksHash) external view returns (bytes32) {
+        if (order.usingPermit2){
+            return keccak256(abi.encodePacked(
+                "\x19\x01", PERMIT2.DOMAIN_SEPARATOR(), order.permit2OrderHash(hooksHash, address(balanceManager))
+            ));
+        } else {
+            return keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), order.hash(hooksHash)));
+        }
     }
 
     /// @notice Cancel limit order by invalidating nonce for the sender address

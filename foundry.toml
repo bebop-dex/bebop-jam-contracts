@@ -4,7 +4,7 @@ out = 'out'
 libs = ['lib']
 solc = '0.8.27'
 optimizer = true
-optimizer_runs = 10239
+optimizer_runs = 3239
 via_ir = true
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config

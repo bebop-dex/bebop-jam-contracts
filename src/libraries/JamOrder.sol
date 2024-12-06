@@ -3,6 +3,7 @@ pragma solidity ^0.8.27;
 
 import "../interfaces/IPermit2.sol";
 import "./JamHooks.sol";
+import "../external-libs/PermitHash.sol";
 
 /// @dev Data representing a Jam Order.
 struct JamOrder {
@@ -63,6 +64,10 @@ library JamOrderLib {
         for (uint i; i < order.sellTokens.length; ++i) {
             details[i] = IPermit2.SignatureTransferDetails(receiver, order.sellAmounts[i]);
         }
+    }
+
+    function permit2OrderHash(JamOrder calldata order, bytes32 hooksHash, address spender) internal pure returns (bytes32) {
+        return PermitHash.hashWithWitness(toBatchPermit2(order), hash(order, hooksHash), PERMIT2_ORDER_TYPE, spender);
     }
 
 

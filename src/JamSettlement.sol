@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.27;
 
-import "./JamBalanceManager.sol";
 import "./base/JamValidation.sol";
 import "./base/JamTransfer.sol";
-import "./interfaces/IJamBalanceManager.sol";
 import "./interfaces/IJamSettlement.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
@@ -15,13 +13,11 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /// As long as the trade is fulfilled, the solver is allowed to keep any potential excess.
 contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTransfer {
 
-    IJamBalanceManager public immutable balanceManager;
     address public immutable bebopBlend;
     using BlendAggregateOrderLib for BlendAggregateOrder;
     using BlendMultiOrderLib for BlendMultiOrder;
 
-    constructor(address _permit2, address _bebopBlend, address _treasuryAddress) JamPartner(_treasuryAddress) {
-        balanceManager = new JamBalanceManager(address(this), _permit2);
+    constructor(address _permit2, address _bebopBlend, address _treasuryAddress) JamPartner(_treasuryAddress) JamValidation(_permit2) {
         bebopBlend = _bebopBlend;
     }
 
