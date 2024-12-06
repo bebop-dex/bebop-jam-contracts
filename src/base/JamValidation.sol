@@ -122,13 +122,15 @@ abstract contract JamValidation {
             bytes32 orderHash = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), order.hash(hooksHash)));
             validateSignature(order.taker, orderHash, signature);
         }
+        if (!order.usingPermit2 || order.expiry == INF_EXPIRY){
+            invalidateOrderNonce(order.taker, order.nonce, order.expiry == INF_EXPIRY);
+        }
         require(
             order.executor == msg.sender || order.executor == address(0) || block.timestamp > order.exclusivityDeadline,
             InvalidExecutor()
         );
         require(order.buyTokens.length == order.buyAmounts.length, BuyTokensInvalidLength());
         require(order.sellTokens.length == order.sellAmounts.length, SellTokensInvalidLength());
-        invalidateOrderNonce(order.taker, order.nonce, order.expiry == INF_EXPIRY);
         require(block.timestamp < order.expiry, OrderExpired());
     }
 

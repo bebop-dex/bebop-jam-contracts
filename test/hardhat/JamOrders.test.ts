@@ -661,4 +661,18 @@ describe("JamOrders", function () {
         0, 1000, undefined, undefined, zeroAddress, true, fixture.anotherUser)
   });
 
+  it('JAM: settle - Permit2 nonce invalidation', async function () {
+    let jamOrder: JamOrderStruct = getOrder("Simple", fixture.user.address, fixture.solver.address, true)!
+    let solverCalls = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
+    await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls)
+
+    let solverCalls2 = await getBebopSolverCalls(jamOrder, bebop, fixture.solverContract.address, fixture.bebopMaker)
+    try {
+      await settle(jamOrder, fixture.solverContract.address, emptyHooks, solverCalls2)
+    } catch (e){
+      return
+    }
+    throw Error("Error was expected")
+  });
+
 });
