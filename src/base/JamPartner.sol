@@ -8,7 +8,7 @@ import "../external-libs/SafeTransferLib.sol";
 /// @title JamPartner
 abstract contract JamPartner {
 
-    uint16 internal constant HUNDRED_PERCENT = 10000;
+    uint16 internal constant HUNDRED_PERCENT = 10000;  // 100% in bps
     address internal immutable protocolFeeAddress;
 
     event NativeTransfer(address indexed receiver, uint256 amount);
@@ -25,7 +25,6 @@ abstract contract JamPartner {
     /// @return totalFeesSent The total amount of tokens sent as fees
     function distributeFees(uint256 partnerInfo, address token, uint256 amount) internal returns (uint256 totalFeesSent){
         (address partnerAddress, uint16 partnerFee, uint16 protocolFee) = unpackPartnerInfo(partnerInfo);
-        require(partnerFee + protocolFee < HUNDRED_PERCENT, InvalidFeePercentage());
         if (partnerFee > 0) {
             totalFeesSent += sendPartnerFee(token, amount, partnerFee, partnerAddress);
         }
@@ -41,6 +40,8 @@ abstract contract JamPartner {
         uint16 protocolFeeBps = uint16(partnerInfo & 0xFFFF);
         uint16 partnerFeeBps = uint16((partnerInfo >> 16) & 0xFFFF);
         address partnerAddress = address(uint160(partnerInfo >> 32));
+        require(partnerFeeBps + protocolFeeBps < HUNDRED_PERCENT, InvalidFeePercentage());
+        require(partnerFeeBps > 0 || (partnerFeeBps == 0 && partnerAddress == address(0)), InvalidPartnerAddress());
         return (partnerAddress, partnerFeeBps, protocolFeeBps);
     }
 
@@ -83,7 +84,6 @@ abstract contract JamPartner {
         uint256[] calldata amounts, uint256[] calldata minAmounts, uint256 partnerInfo
     ) internal pure returns (uint256[] memory newAmounts, uint256[] memory protocolFees, uint256[] memory partnerFees, address) {
         (address partnerAddress, uint16 partnerFee, uint16 protocolFee) = unpackPartnerInfo(partnerInfo);
-        require(partnerFee + protocolFee < HUNDRED_PERCENT, InvalidFeePercentage());
         uint tokensLength = amounts.length;
         require(minAmounts.length == tokensLength, InvalidFilledAmountsLength());
         newAmounts = new uint256[](tokensLength);

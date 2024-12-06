@@ -56,6 +56,9 @@ error InvalidReceiverInBatch();
 /// @notice Thrown when different fees are passed in batch
 error DifferentFeesInBatch();
 
+/// @notice Thrown when invalid partner address is passed
+error InvalidPartnerAddress();
+
 /// @notice Thrown when caller is not settlement contract
 error InvalidCaller();
 
