@@ -4,18 +4,19 @@ pragma solidity ^0.8.27;
 import "../base/Errors.sol";
 import "../libraries/JamOrder.sol";
 import "../libraries/JamHooks.sol";
-import "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import "../JamBalanceManager.sol";
+import "@openzeppelin/contracts/interfaces/IERC1271.sol";
+import "@openzeppelin/contracts/interfaces/IERC5267.sol";
 
 /// @title JamValidation
 /// @notice Functions which handles the signing and validation of Jam orders
-abstract contract JamValidation {
+abstract contract JamValidation is IERC5267 {
     mapping(address => mapping(uint256 => uint256)) private standardNonces;
     mapping(address => mapping(uint256 => uint256)) private limitOrdersNonces;
     uint256 private constant INF_EXPIRY = 9999999999; // expiry for limit orders
 
-    bytes32 public constant DOMAIN_NAME = keccak256("JamSettlement");
-    bytes32 public constant DOMAIN_VERSION = keccak256("2");
+    string public constant DOMAIN_NAME = "JamSettlement";
+    string public constant DOMAIN_VERSION = "2";
     bytes32 private constant UPPER_BIT_MASK = (0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
     bytes4 private constant EIP1271_MAGICVALUE = bytes4(keccak256("isValidSignature(bytes32,bytes)"));
     bytes32 public constant EIP712_DOMAIN_TYPEHASH = keccak256(abi.encodePacked(
@@ -32,7 +33,7 @@ abstract contract JamValidation {
         balanceManager = new JamBalanceManager(address(this), _permit2);
         _CACHED_CHAIN_ID = block.chainid;
         _CACHED_DOMAIN_SEPARATOR = keccak256(
-            abi.encode(EIP712_DOMAIN_TYPEHASH, DOMAIN_NAME, DOMAIN_VERSION, block.chainid, address(this))
+            abi.encode(EIP712_DOMAIN_TYPEHASH, keccak256(bytes(DOMAIN_NAME)), keccak256(bytes(DOMAIN_VERSION)), block.chainid, address(this))
         );
         PERMIT2 = IPermit2(_permit2);
     }
@@ -43,8 +44,16 @@ abstract contract JamValidation {
         return block.chainid == _CACHED_CHAIN_ID
             ? _CACHED_DOMAIN_SEPARATOR
             : keccak256(
-                abi.encode(EIP712_DOMAIN_TYPEHASH, DOMAIN_NAME, DOMAIN_VERSION, block.chainid, address(this))
+                abi.encode(EIP712_DOMAIN_TYPEHASH, keccak256(bytes(DOMAIN_NAME)), keccak256(bytes(DOMAIN_VERSION)), block.chainid, address(this))
             );
+    }
+
+    /// @notice ERC5267 implementation for requesting the EIP712 domain values
+    function eip712Domain() public view returns (
+        bytes1 fields, string memory name, string memory version, uint256 chainId,
+        address verifyingContract, bytes32 salt, uint256[] memory extensions
+    ){
+        return (hex"0f", DOMAIN_NAME, DOMAIN_VERSION, block.chainid, address(this), bytes32(0), new uint256[](0));
     }
 
     /// @notice Validate the order signature
