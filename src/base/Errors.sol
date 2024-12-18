@@ -82,3 +82,6 @@ error CallToBalanceManagerNotAllowed();
 
 /// @notice Thrown when there are duplicate buy tokens in the order
 error DuplicateTokens();
+
+/// @notice Thrown when new partner-id is different from the current one
+error InvalidBlendPartnerId();

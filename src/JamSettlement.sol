@@ -158,10 +158,15 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
                 IBebopBlend.MakerSignature memory makerSignature,
                 IBebopBlend.OldSingleQuote memory takerQuoteInfo,
                 address makerAddress,
+                uint256 newFlags,
                 bytes memory takerSignature
-            ) = abi.decode(data, (BlendSingleOrder, IBebopBlend.MakerSignature, IBebopBlend.OldSingleQuote, address, bytes));
+            ) = abi.decode(data, (BlendSingleOrder, IBebopBlend.MakerSignature, IBebopBlend.OldSingleQuote, address, uint256, bytes));
             balanceManager.transferTokenForBlendSingleOrder(order, takerQuoteInfo, takerSignature, takerAddress, hooksHash);
             order.maker_address = makerAddress;
+            if (newFlags != 0){
+                require(uint64(order.flags >> 64) == uint64(newFlags >> 64), InvalidBlendPartnerId());
+                order.flags = newFlags;
+            }
             approveToken(IERC20(order.taker_token), order.taker_amount, bebopBlend);
             IBebopBlend(bebopBlend).settleSingle(order, makerSignature, 0, takerQuoteInfo, "0x");
             emit BebopBlendSingleOrderFilled(
@@ -175,10 +180,15 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
                 IBebopBlend.MakerSignature memory makerSignature,
                 IBebopBlend.OldMultiQuote memory takerQuoteInfo,
                 address makerAddress,
+                uint256 newFlags,
                 bytes memory takerSignature
-            ) = abi.decode(data, (BlendMultiOrder, IBebopBlend.MakerSignature, IBebopBlend.OldMultiQuote, address, bytes));
+            ) = abi.decode(data, (BlendMultiOrder, IBebopBlend.MakerSignature, IBebopBlend.OldMultiQuote, address, uint256, bytes));
             balanceManager.transferTokensForMultiBebopOrder(order, takerQuoteInfo, takerSignature, takerAddress, hooksHash);
             order.maker_address = makerAddress;
+            if (newFlags != 0){
+                require(uint64(order.flags >> 64) == uint64(newFlags >> 64), InvalidBlendPartnerId());
+                order.flags = newFlags;
+            }
             for (uint i; i < order.taker_tokens.length; ++i) {
                 approveToken(IERC20(order.taker_tokens[i]), order.taker_amounts[i], bebopBlend);
             }
@@ -192,9 +202,14 @@ contract JamSettlement is IJamSettlement, ReentrancyGuard, JamValidation, JamTra
                 BlendAggregateOrder memory order,
                 IBebopBlend.MakerSignature[] memory makerSignatures,
                 IBebopBlend.OldAggregateQuote memory takerQuoteInfo,
+                uint256 newFlags,
                 bytes memory takerSignature
-            ) = abi.decode(data, (BlendAggregateOrder, IBebopBlend.MakerSignature[], IBebopBlend.OldAggregateQuote, bytes));
+            ) = abi.decode(data, (BlendAggregateOrder, IBebopBlend.MakerSignature[], IBebopBlend.OldAggregateQuote, uint256, bytes));
             balanceManager.transferTokensForAggregateBebopOrder(order, takerQuoteInfo, takerSignature, takerAddress, hooksHash);
+            if (newFlags != 0){
+                require(uint64(order.flags >> 64) == uint64(newFlags >> 64), InvalidBlendPartnerId());
+                order.flags = newFlags;
+            }
             (address[] memory tokens, uint256[] memory amounts) = order.unpackTokensAndAmounts(true, takerQuoteInfo);
             for (uint i; i < tokens.length; ++i) {
                 approveToken(IERC20(tokens[i]), amounts[i], bebopBlend);
