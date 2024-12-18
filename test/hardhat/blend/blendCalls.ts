@@ -99,7 +99,7 @@ export async function getBebopSolverCalls(
 
 
 export function encodeSingleBlendOrderArgsForJam(
-    order: BlendSingleOrderStruct, makerSignature: IBebopBlend.MakerSignatureStruct, oldQuoteSingle: IBebopBlend.OldSingleQuoteStruct, makerAddress: string, signature: string
+    order: BlendSingleOrderStruct, makerSignature: IBebopBlend.MakerSignatureStruct, oldQuoteSingle: IBebopBlend.OldSingleQuoteStruct, makerAddress: string, newFlags: string, signature: string
 ){
     return utils.defaultAbiCoder.encode(
         [
@@ -107,19 +107,21 @@ export function encodeSingleBlendOrderArgsForJam(
             "(bytes,uint256)",
             "(bool,uint256,uint256)",
             "address",
+            "uint256",
             "bytes"
         ], [
             Object.values(order),
             Object.values(makerSignature),
             Object.values(oldQuoteSingle),
             makerAddress,
+            newFlags,
             signature
         ]
     )
 }
 
 export function encodeMultiBlendOrderArgsForJam(
-    order: BlendMultiOrderStruct, makerSignature: IBebopBlend.MakerSignatureStruct, oldQuoteMulti: IBebopBlend.OldMultiQuoteStruct, makerAddress: string, signature: string
+    order: BlendMultiOrderStruct, makerSignature: IBebopBlend.MakerSignatureStruct, oldQuoteMulti: IBebopBlend.OldMultiQuoteStruct, makerAddress: string, newFlags: string, signature: string
 ){
     return utils.defaultAbiCoder.encode(
         [
@@ -127,30 +129,34 @@ export function encodeMultiBlendOrderArgsForJam(
             "(bytes,uint256)",
             "(bool,uint256[],uint256)",
             "address",
+            "uint256",
             "bytes"
         ], [
             Object.values(order),
             Object.values(makerSignature),
             Object.values(oldQuoteMulti),
             makerAddress,
+            newFlags,
             signature
         ]
     )
 }
 
 export function encodeAggregateBlendOrderArgsForJam(
-    order: BlendAggregateOrderStruct, makerSignatures: IBebopBlend.MakerSignatureStruct[], oldQuoteAggregate: IBebopBlend.OldAggregateQuoteStruct, signature: string
+    order: BlendAggregateOrderStruct, makerSignatures: IBebopBlend.MakerSignatureStruct[], oldQuoteAggregate: IBebopBlend.OldAggregateQuoteStruct,  newFlags: string, signature: string
 ){
     return utils.defaultAbiCoder.encode(
         [
             "(uint256,address,address[],uint256[],address[][],address[][],uint256[][],uint256[][],address,bytes,uint256)",
             "(bytes,uint256)[]",
             "(bool,uint256[][],uint256[])",
+            "uint256",
             "bytes"
         ], [
             Object.values(order),
             makerSignatures.map(ss => Object.values(ss)),
             Object.values(oldQuoteAggregate),
+            newFlags,
             signature
         ]
     )

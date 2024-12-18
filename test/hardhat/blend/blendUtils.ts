@@ -17,7 +17,7 @@ const NO_PARTNER: PartnerInfo = {
     beneficiary: ethers.constants.AddressZero
 }
 
-enum SignatureType {
+export enum SignatureType {
     EIP712,
     EIP1271,
     ETHSIGN
