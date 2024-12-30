@@ -29,7 +29,7 @@ task("deployZkSync", "Deploy Zk Sync").setAction(deployZkSync);
 
 const config: HardhatUserConfig = {
   zksolc: {
-    version: "1.3.22", // Uses latest available in https://github.com/matter-labs/zksolc-bin/
+    version: "1.5.4", // Uses latest available in https://github.com/matter-labs/zksolc-bin/
     settings: {
       optimizer: {
         enabled: true,
@@ -142,7 +142,7 @@ const config: HardhatUserConfig = {
       zksync: false
     },
     taiko: {
-      url: 'https://rpc.ankr.com/taiko',
+      url: 'https://rpc.taiko.xyz/',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
       zksync: false
     },
@@ -150,14 +150,24 @@ const config: HardhatUserConfig = {
       url: 'https://bartio.rpc.berachain.com/',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
       zksync: false
-    }
+    },
+    blast: {
+      url: 'https://rpc.blast.io/',
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+      zksync: false
+    },
   },
   etherscan: {
     apiKey: {
+      mainnet: process.env.ETHERSCAN_API_KEY!,
+      polygon: process.env.ETHERSCAN_API_KEY!,
+      arbitrumOne: process.env.ETHERSCAN_API_KEY!,
       base: process.env.ETHERSCAN_API_KEY!,
       optimisticEthereum: process.env.ETHERSCAN_API_KEY!,
       scroll: process.env.ETHERSCAN_API_KEY!,
       taiko: process.env.ETHERSCAN_API_KEY!,
+      bsc: process.env.ETHERSCAN_API_KEY!,
+      blast: process.env.ETHERSCAN_API_KEY!,
       mode: "abc",
       bArtio: "abc"
     },
@@ -201,7 +211,15 @@ const config: HardhatUserConfig = {
           apiURL: "https://api.routescan.io/v2/network/testnet/evm/80084/etherscan/api",
           browserURL: "https://bartio.beratrail.io/"
         }
-      }
+      },
+      {
+        network: "blast",
+        chainId: 81457,
+        urls: {
+          apiURL: "https://api.blastscan.io//api",
+          browserURL: "https://blastscan.io/"
+        }
+      },
     ],
   },
 };

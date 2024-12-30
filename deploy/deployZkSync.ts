@@ -2,7 +2,7 @@ import { Wallet, utils } from "zksync-ethers";
 import * as ethers from "ethers";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { Deployer } from "@matterlabs/hardhat-zksync-deploy";
-import { getDaiAddress, getPermit2Address } from "../tasks/addresses";
+import {getBebopBlendAddress, getPermit2Address, getTreasuryAddress} from "../tasks/addresses";
 
 // load wallet private key from env file
 const PRIVATE_KEY = process.env.PRIVATE_KEY || "";
@@ -21,10 +21,12 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   const chainId = (await deployer.zkWallet.provider.getNetwork()).chainId;
   if (!chainId) throw "⛔️ Chain ID not detected!";
   const permit2Address = getPermit2Address(chainId)
-  const daiAddress = getDaiAddress(chainId)
+  const bebopBlendAddress = getBebopBlendAddress(chainId)
+  const treasuryAddress = getTreasuryAddress(chainId)
+
 
   const artifact = await deployer.loadArtifact("JamSettlement");
-  const params = [permit2Address, daiAddress];
+  const params = [permit2Address, bebopBlendAddress, treasuryAddress];
   const deploymentFee = await deployer.estimateDeployFee(artifact, params);
 
   // Deploy this contract. The returned object will be of a `Contract` type, similar to ones in `ethers`.
