@@ -156,6 +156,10 @@ const config: HardhatUserConfig = {
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
       zksync: false
     },
+    megaeth: {
+      url: 'https://carrot.megaeth.com/rpc',
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined
+    },
   },
   etherscan: {
     apiKey: {

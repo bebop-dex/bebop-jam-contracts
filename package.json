@@ -24,6 +24,7 @@
     "deploy:blast": "npx hardhat --network blast deploy",
     "deploy:scroll": "npx hardhat --network scroll deploy",
     "deploy:mode": "npx hardhat --network mode deploy",
+    "deploy:megaeth": "npx hardhat --network megaeth deploy",
     "verify:polygon": "npx hardhat verify --network polygon --constructor-args tasks/arguments/args.ts",
     "verify:arbitrum": "npx hardhat verify --network arbitrum --constructor-args tasks/arguments/args.ts",
     "verify:base": "npx hardhat verify --network base --constructor-args tasks/arguments/args.ts",
