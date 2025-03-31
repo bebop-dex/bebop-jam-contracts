@@ -25,6 +25,7 @@
     "deploy:scroll": "npx hardhat --network scroll deploy",
     "deploy:mode": "npx hardhat --network mode deploy",
     "deploy:megaeth": "npx hardhat --network megaeth deploy",
+    "deploy:superseed": "npx hardhat --network superseed deploy",
     "verify:polygon": "npx hardhat verify --network polygon --constructor-args tasks/arguments/args.ts",
     "verify:arbitrum": "npx hardhat verify --network arbitrum --constructor-args tasks/arguments/args.ts",
     "verify:base": "npx hardhat verify --network base --constructor-args tasks/arguments/args.ts",
@@ -36,6 +37,7 @@
     "verify:blast": "npx hardhat verify --network blast --constructor-args tasks/arguments/args.ts",
     "verify:scroll": "npx hardhat verify --network scroll --constructor-args tasks/arguments/args.ts",
     "verify:mode": "npx hardhat verify --network mode --constructor-args tasks/arguments/args.ts",
+    "verify:superseed": "npx hardhat verify --network superseed --constructor-args tasks/arguments/args.ts",
     "flatten-contracts": "sol-merger \"./src/*.sol\" ./flatten"
   },
   "author": "<info@bebop.xyz>",

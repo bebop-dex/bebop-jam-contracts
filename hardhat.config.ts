@@ -160,6 +160,10 @@ const config: HardhatUserConfig = {
       url: 'https://carrot.megaeth.com/rpc',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined
     },
+    superseed: {
+      url: 'https://mainnet.superseed.xyz',
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined
+    },
   },
   etherscan: {
     apiKey: {
@@ -173,7 +177,8 @@ const config: HardhatUserConfig = {
       bsc: process.env.ETHERSCAN_API_KEY!,
       blast: process.env.ETHERSCAN_API_KEY!,
       mode: "abc",
-      bArtio: "abc"
+      bArtio: "abc",
+      superseed: "abc"
     },
     customChains: [
       {
@@ -222,6 +227,14 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "https://api.blastscan.io//api",
           browserURL: "https://blastscan.io/"
+        }
+      },
+      {
+        network: "superseed",
+        chainId: 5330,
+        urls: {
+          apiURL: "https://explorer.superseed.xyz/api",
+          browserURL: "https://explorer.superseed.xyz/"
         }
       },
     ],
