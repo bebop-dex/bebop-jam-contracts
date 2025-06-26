@@ -16,7 +16,7 @@ function getPermit2Address(chainId: number) {
 }
 
 function getBebopBlendAddress(chainId: number) {
-  if ([137, 1, 42161, 56, 10, 8453, 167000, 81457, 534352, 34443, 6342, 5330].includes(chainId)) {
+  if ([137, 1, 42161, 43114, 56, 10, 8453, 167000, 81457, 534352, 34443, 6342, 5330].includes(chainId)) {
     return '0xbbbbbBB520d69a9775E85b458C58c648259FAD5F'
   }
   if ([324].includes(chainId)) {

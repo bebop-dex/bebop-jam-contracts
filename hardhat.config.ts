@@ -122,7 +122,7 @@ const config: HardhatUserConfig = {
       zksync: false
     },
     avalanche: {
-      url: 'https://avalanche.drpc.org',
+      url: 'https://avalanche-mainnet.infura.io/v3/5ba6a6866dfc47559bb64b7738e960a7',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
       zksync: false
     },
@@ -176,6 +176,7 @@ const config: HardhatUserConfig = {
       taiko: process.env.ETHERSCAN_API_KEY!,
       bsc: process.env.ETHERSCAN_API_KEY!,
       blast: process.env.ETHERSCAN_API_KEY!,
+      avalanche: process.env.ETHERSCAN_API_KEY!,
       mode: "abc",
       bArtio: "abc",
       superseed: "abc"
@@ -185,8 +186,8 @@ const config: HardhatUserConfig = {
         network: "avalanche",
         chainId: 43114,
         urls: {
-          apiURL: "https://api.avascan.info/v2/network/mainnet/evm/43114/etherscan",
-          browserURL: "https://mainnet.avascan.info/blockchain/mainnet"
+          apiURL: "https://api.snowscan.xyz/api",
+          browserURL: "https://snowscan.xyz"
         }
       },
       {
